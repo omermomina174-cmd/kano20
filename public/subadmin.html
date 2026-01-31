@@ -919,10 +919,17 @@
       $$: (sel) => document.querySelectorAll(sel),
 
       /**
+       * Safe get value with fallback
+       */
+      safe: (value, fallback = "") => value ?? fallback,
+
+      /**
        * Format amount with 2 decimals
        */
       formatAmount: (n) => {
-        return Number(n || 0).toLocaleString("en-US", {
+        const num = Number(n);
+        if (isNaN(num)) return "0.00";
+        return num.toLocaleString("en-US", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         });
@@ -933,27 +940,34 @@
        */
       formatTime: (d) => {
         if (!d) return "";
-        const dt = new Date(d);
-        const now = new Date();
-        const diff = now - dt;
+        try {
+          const dt = new Date(d);
+          if (isNaN(dt.getTime())) return "";
+          
+          const now = new Date();
+          const diff = now - dt;
 
-        if (diff < 60000) return "now";
-        if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-        return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+          if (diff < 60000) return "now";
+          if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+          if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+          return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+        } catch {
+          return "";
+        }
       },
 
       /**
        * Escape HTML special characters
        */
       escapeHtml: (s) => {
-        return String(s || "").replace(/[&<>"']/g, (c) => ({
+        const str = String(s ?? "");
+        return str.replace(/[&<>"']/g, (c) => ({
           "&": "&amp;",
           "<": "&lt;",
           ">": "&gt;",
           '"': "&quot;",
           "'": "&#39;",
-        }[c]));
+        }[c] || c));
       },
 
       /**
@@ -971,7 +985,9 @@
        */
       haptic: (type = "light") => {
         try {
-          tg?.HapticFeedback?.impactOccurred(type);
+          if (tg?.HapticFeedback?.impactOccurred) {
+            tg.HapticFeedback.impactOccurred(type);
+          }
         } catch {}
       },
     };
@@ -982,7 +998,7 @@
 
     const API = {
       /**
-       * Make API request
+       * Make API request with better error handling
        */
       request: async (endpoint, options = {}) => {
         try {
@@ -994,9 +1010,23 @@
               ...(options.headers || {}),
             },
           });
-          return await res.json();
+
+          if (!res.ok) {
+            // Try to parse error response
+            try {
+              const errorData = await res.json();
+              return { ok: false, error: errorData.error || "REQUEST_FAILED" };
+            } catch {
+              return { ok: false, error: `HTTP_${res.status}` };
+            }
+          }
+
+          const data = await res.json();
+          // Ensure ok field exists
+          return { ok: true, ...data };
         } catch (e) {
-          return { ok: false, error: e.message };
+          console.error("[API] Request failed:", e);
+          return { ok: false, error: e.message || "NETWORK_ERROR" };
         }
       },
 
@@ -1147,7 +1177,8 @@
        */
       addItems(type, items, append = false) {
         const collection = this[type];
-        const newItems = items.filter((item) => !collection.ids.has(item.id));
+        const validItems = (items || []).filter(item => item && item.id);
+        const newItems = validItems.filter((item) => !collection.ids.has(item.id));
         newItems.forEach((item) => collection.ids.add(item.id));
 
         if (append) {
@@ -1200,7 +1231,7 @@
        * Update balance display
        */
       updateBalance(balance) {
-        State.balance = Number(balance || 0);
+        State.balance = Number(balance) || 0;
         const el = Utils.$("balanceValue");
         el.textContent = Utils.formatAmount(State.balance);
         el.className =
@@ -1243,10 +1274,13 @@
        * Update stats display
        */
       updateStats(deposits, withdraws) {
-        Utils.$("depositCount").textContent = deposits.count || 0;
-        Utils.$("tabDepCount").textContent = deposits.count || 0;
-        Utils.$("withdrawCount").textContent = withdraws.count || 0;
-        Utils.$("tabWdCount").textContent = withdraws.count || 0;
+        const depCount = Number(deposits?.count) || 0;
+        const wdCount = Number(withdraws?.count) || 0;
+
+        Utils.$("depositCount").textContent = depCount;
+        Utils.$("tabDepCount").textContent = depCount;
+        Utils.$("withdrawCount").textContent = wdCount;
+        Utils.$("tabWdCount").textContent = wdCount;
       },
 
       /**
@@ -1363,13 +1397,13 @@
 
           State.deposits.items.forEach((item) => {
             if (State.deposits.selected.has(item.id)) {
-              totalAmount += item.amount;
+              totalAmount += Number(item.amount) || 0;
             }
           });
 
           State.withdraws.items.forEach((item) => {
             if (State.withdraws.selected.has(item.id)) {
-              totalAmount += item.amount;
+              totalAmount += Number(item.amount) || 0;
             }
           });
 
@@ -1436,6 +1470,9 @@
        */
       depositItem(deposit, prepend = false) {
         const div = document.createElement("div");
+        const amount = Number(deposit.amount) || 0;
+        const phone = Utils.safe(deposit.senderPhone, "N/A");
+        
         div.className = `list-item ${State.status !== "active" ? "disabled" : ""} ${
           prepend ? "new" : ""
         } ${State.deposits.selected.has(deposit.id) ? "selected" : ""}`;
@@ -1447,19 +1484,17 @@
             }" onclick="UI.toggleSelection('deposits', '${deposit.id}')"></div>
             <div class="list-item__row">
               <div>
-                <div class="list-item__phone">📱 ${Utils.escapeHtml(deposit.senderPhone)}</div>
+                <div class="list-item__phone">📱 ${Utils.escapeHtml(phone)}</div>
               </div>
               <div class="list-item__right">
-                <div class="list-item__amount green">+${Utils.formatAmount(deposit.amount)}</div>
+                <div class="list-item__amount green">+${Utils.formatAmount(amount)}</div>
                 <div class="list-item__time">${Utils.formatTime(deposit.createdAt)}</div>
               </div>
             </div>
           </div>
           <div class="list-item__actions">
             <button class="btn btn-approve" onclick="Actions.approveDeposit('${deposit.id}')">✓ Approve</button>
-            <button class="btn btn-reject" onclick="Actions.openRejectModal('deposit', '${
-              deposit.id
-            }')">✗ Reject</button>
+            <button class="btn btn-reject" onclick="Actions.openRejectModal('deposit', '${deposit.id}')">✗ Reject</button>
           </div>
         `;
         return div;
@@ -1470,6 +1505,10 @@
        */
       withdrawItem(withdraw, prepend = false) {
         const div = document.createElement("div");
+        const amount = Number(withdraw.amount) || 0;
+        const phone = Utils.safe(withdraw.receiverPhone, "N/A");
+        const name = Utils.safe(withdraw.receiverFirstName, "");
+        
         div.className = `list-item ${State.status !== "active" ? "disabled" : ""} ${
           prepend ? "new" : ""
         } ${State.withdraws.selected.has(withdraw.id) ? "selected" : ""}`;
@@ -1481,22 +1520,18 @@
             }" onclick="UI.toggleSelection('withdraws', '${withdraw.id}')"></div>
             <div class="list-item__row">
               <div>
-                <div class="list-item__phone">📱 ${Utils.escapeHtml(withdraw.receiverPhone)}</div>
-                <div class="list-item__name">👤 ${Utils.escapeHtml(
-                  withdraw.receiverFirstName
-                ) || "—"}</div>
+                <div class="list-item__phone">📱 ${Utils.escapeHtml(phone)}</div>
+                ${name ? `<div class="list-item__name">👤 ${Utils.escapeHtml(name)}</div>` : ""}
               </div>
               <div class="list-item__right">
-                <div class="list-item__amount gold">-${Utils.formatAmount(withdraw.amount)}</div>
+                <div class="list-item__amount gold">-${Utils.formatAmount(amount)}</div>
                 <div class="list-item__time">${Utils.formatTime(withdraw.createdAt)}</div>
               </div>
             </div>
           </div>
           <div class="list-item__actions">
             <button class="btn btn-approve" onclick="Actions.approveWithdraw('${withdraw.id}')">✓ Approve</button>
-            <button class="btn btn-reject" onclick="Actions.openRejectModal('withdraw', '${
-              withdraw.id
-            }')">✗ Reject</button>
+            <button class="btn btn-reject" onclick="Actions.openRejectModal('withdraw', '${withdraw.id}')">✗ Reject</button>
           </div>
         `;
         return div;
@@ -1509,7 +1544,9 @@
         const list = Utils.$("depositsList");
         if (!append) list.innerHTML = "";
 
-        items.forEach((deposit) => {
+        const validItems = (items || []).filter(item => item && item.id);
+        
+        validItems.forEach((deposit) => {
           if (Utils.$(`dep-${deposit.id}`)) return;
           const item = this.depositItem(deposit, prepend);
           if (prepend) {
@@ -1527,7 +1564,9 @@
         const list = Utils.$("withdrawsList");
         if (!append) list.innerHTML = "";
 
-        items.forEach((withdraw) => {
+        const validItems = (items || []).filter(item => item && item.id);
+        
+        validItems.forEach((withdraw) => {
           if (Utils.$(`wd-${withdraw.id}`)) return;
           const item = this.withdrawItem(withdraw, prepend);
           if (prepend) {
@@ -1551,9 +1590,10 @@
         const r = await API.auth();
         if (!r.ok) throw new Error(r.error || "AUTH_FAILED");
 
-        Utils.$("userInfo").textContent = `👤 ${r.subadmin.username}`;
-        UI.updateBalance(r.subadmin.balance || 0);
-        UI.updateStatus(r.subadmin.status || "active");
+        const username = Utils.safe(r.subadmin?.username, "SubAdmin");
+        Utils.$("userInfo").textContent = `👤 ${username}`;
+        UI.updateBalance(r.subadmin?.balance);
+        UI.updateStatus(r.subadmin?.status);
 
         return r.subadmin;
       },
@@ -1569,7 +1609,7 @@
           UI.updateStatus(r.status);
           Utils.showToast(r.status === "active" ? "✓ Active" : "😴 Sleep");
         } else {
-          Utils.showToast("Failed", "error");
+          Utils.showToast("Failed: " + (r.error || "Unknown"), "error");
         }
       },
 
@@ -1585,10 +1625,13 @@
 
         Utils.$("refreshIndicator").classList.remove("active");
 
-        if (!r.ok) return;
+        if (!r.ok) {
+          if (!silent) Utils.showToast("Stats failed: " + (r.error || "Unknown"), "error");
+          return;
+        }
 
         UI.updateStats(r.deposits, r.withdraws);
-        if (r.balance !== undefined) UI.updateBalance(r.balance);
+        if (r.balance !== undefined && r.balance !== null) UI.updateBalance(r.balance);
         if (r.status) UI.updateStatus(r.status);
       },
 
@@ -1616,13 +1659,14 @@
         UI.hideLoading("deposits");
 
         if (!r.ok) {
-          Utils.showToast("Load failed", "error");
+          Utils.showToast("Load failed: " + (r.error || "Unknown"), "error");
           return;
         }
 
-        const newItems = State.addItems("deposits", r.items, append);
-        s.hasMore = r.hasMore;
-        s.cursor = r.nextCursor;
+        const items = r.items || [];
+        const newItems = State.addItems("deposits", items, append);
+        s.hasMore = r.hasMore || false;
+        s.cursor = r.nextCursor || null;
 
         Render.deposits(newItems, append);
 
@@ -1645,7 +1689,8 @@
         if (!r.ok) return;
 
         const s = State.deposits;
-        const newItems = r.items.filter((item) => !s.ids.has(item.id));
+        const items = r.items || [];
+        const newItems = items.filter((item) => item && item.id && !s.ids.has(item.id));
 
         if (newItems.length > 0) {
           State.addItems("deposits", newItems, false);
@@ -1687,7 +1732,8 @@
             UI.updateSelectAllCheckbox("deposits");
           }
         } else {
-          Utils.showToast(r.error === "SLEEP_MODE" ? "Enable active mode" : r.error, "error");
+          const errorMsg = r.error === "SLEEP_MODE" ? "Enable active mode" : (r.error || "Failed");
+          Utils.showToast(errorMsg, "error");
           if (btn) btn.disabled = false;
         }
       },
@@ -1716,13 +1762,14 @@
         UI.hideLoading("withdraws");
 
         if (!r.ok) {
-          Utils.showToast("Load failed", "error");
+          Utils.showToast("Load failed: " + (r.error || "Unknown"), "error");
           return;
         }
 
-        const newItems = State.addItems("withdraws", r.items, append);
-        s.hasMore = r.hasMore;
-        s.cursor = r.nextCursor;
+        const items = r.items || [];
+        const newItems = State.addItems("withdraws", items, append);
+        s.hasMore = r.hasMore || false;
+        s.cursor = r.nextCursor || null;
 
         Render.withdraws(newItems, append);
 
@@ -1745,7 +1792,8 @@
         if (!r.ok) return;
 
         const s = State.withdraws;
-        const newItems = r.items.filter((item) => !s.ids.has(item.id));
+        const items = r.items || [];
+        const newItems = items.filter((item) => item && item.id && !s.ids.has(item.id));
 
         if (newItems.length > 0) {
           State.addItems("withdraws", newItems, false);
@@ -1787,7 +1835,8 @@
             UI.updateSelectAllCheckbox("withdraws");
           }
         } else {
-          Utils.showToast(r.error === "SLEEP_MODE" ? "Enable active mode" : r.error, "error");
+          const errorMsg = r.error === "SLEEP_MODE" ? "Enable active mode" : (r.error || "Failed");
+          Utils.showToast(errorMsg, "error");
           if (btn) btn.disabled = false;
         }
       },
@@ -1820,8 +1869,8 @@
           const r = await API.bulkApproveDeposits(depositIds);
 
           if (r.ok) {
-            totalApproved += r.approved;
-            totalFailed += r.failed;
+            totalApproved += Number(r.approved) || 0;
+            totalFailed += Number(r.failed) || 0;
             UI.updateBalance(r.newBalance);
 
             depositIds.forEach((id) => {
@@ -1838,8 +1887,8 @@
           const r = await API.bulkApproveWithdraws(withdrawIds);
 
           if (r.ok) {
-            totalApproved += r.approved;
-            totalFailed += r.failed;
+            totalApproved += Number(r.approved) || 0;
+            totalFailed += Number(r.failed) || 0;
             UI.updateBalance(r.newBalance);
 
             withdrawIds.forEach((id) => {
@@ -1936,7 +1985,8 @@
             UI.updateSelectAllCheckbox(collectionType);
           }
         } else {
-          Utils.showToast(r.error === "SLEEP_MODE" ? "Enable active mode" : r.error, "error");
+          const errorMsg = r.error === "SLEEP_MODE" ? "Enable active mode" : (r.error || "Failed");
+          Utils.showToast(errorMsg, "error");
         }
       },
     };
@@ -2061,7 +2111,7 @@
         AutoRefresh.start();
       } catch (e) {
         console.error("Init error:", e);
-        Utils.$("userInfo").textContent = `❌ ${e.message}`;
+        Utils.$("userInfo").textContent = `❌ ${e.message || "Init failed"}`;
         Utils.showToast("Auth failed", "error");
       }
     }
