@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="color-scheme" content="dark" />
+  <title>SubAdmin Panel</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════
+       CSS VARIABLES
+    ═══════════════════════════════════════════════════════════════ */
+    :root {
+      --bg: #0f0f0f;
+      --bg-card: #1a1a1a;
+      --bg-hover: #252525;
+      --border: #2a2a2a;
+      --text: #ffffff;
+      --text-muted: #888888;
+      --gold: #f5a623;
+      --green: #22c55e;
+      --green-bg: rgba(34, 197, 94, 0.1);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.1);
+      --blue: #3b82f6;
+      --purple: #a855f7;
+      --radius: 8px;
+      --radius-sm: 6px;
+      --header-height: 140px;
+      --transition: all 0.2s ease;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       GLOBAL RESET
+    ═══════════════════════════════════════════════════════════════ */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      min-height: 100vh;
+      padding-top: var(--header-height);
+      padding-bottom: 80px;
+      overscroll-behavior-y: contain;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 0 12px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       HEADER (STICKY)
+    ═══════════════════════════════════════════════════════════════ */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 12px;
+    }
+
+    .header-content {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       STATUS TOGGLE
+    ═══════════════════════════════════════════════════════════════ */
+    .status-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-label.active { color: var(--green); }
+    .status-label.sleep { color: var(--gold); }
+
+    .toggle-switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      background: var(--border);
+      border-radius: 99px;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .toggle-switch.active { background: var(--green); }
+
+    .toggle-switch::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      transition: var(--transition);
+    }
+
+    .toggle-switch.active::after {
+      transform: translateX(18px);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       REFRESH INDICATOR
+    ═══════════════════════════════════════════════════════════════ */
+    .refresh-indicator {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transform-origin: left;
+      z-index: 1000;
+    }
+
+    .refresh-indicator.active {
+      animation: progress 2s linear infinite;
+    }
+
+    @keyframes progress {
+      0% { transform: scaleX(0); }
+      50% { transform: scaleX(0.7); }
+      100% { transform: scaleX(1); }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       BALANCE + STATS
+    ═══════════════════════════════════════════════════════════════ */
+    .info-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px;
+      text-align: center;
+    }
+
+    .info-card.balance { border-color: var(--blue); }
+    .info-card.deposits { border-left: 2px solid var(--green); }
+    .info-card.withdraws { border-left: 2px solid var(--gold); }
+
+    .info-value {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .info-value.positive { color: var(--green); }
+    .info-value.negative { color: var(--red); }
+    .info-value.zero { color: var(--text-muted); }
+    .info-value.green { color: var(--green); }
+    .info-value.gold { color: var(--gold); }
+
+    .info-label {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-top: 2px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       TABS
+    ═══════════════════════════════════════════════════════════════ */
+    .tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: var(--transition);
+      text-align: center;
+    }
+
+    .tab:hover { background: var(--bg-hover); }
+
+    .tab.active {
+      background: var(--gold);
+      color: #000;
+      border-color: var(--gold);
+    }
+
+    .tab .count {
+      display: inline-block;
+      background: rgba(0,0,0,0.2);
+      padding: 1px 6px;
+      border-radius: 99px;
+      font-size: 11px;
+      margin-left: 4px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       BULK ACTION BAR
+    ═══════════════════════════════════════════════════════════════ */
+    .bulk-action-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg-card);
+      border-top: 2px solid var(--purple);
+      padding: 10px 12px;
+      z-index: 99;
+      display: none;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+    }
+
+    .bulk-action-bar.show {
+      display: block;
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .bulk-action-content {
+      max-width: 600px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .bulk-info { flex: 1; }
+
+    .bulk-count {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--purple);
+    }
+
+    .bulk-total {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .bulk-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-bulk {
+      padding: 10px 16px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      white-space: nowrap;
+    }
+
+    .btn-bulk:active { transform: scale(0.97); }
+    .btn-bulk-approve { background: var(--green); color: white; }
+    .btn-bulk-clear { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+
+    /* ═══════════════════════════════════════════════════════════════
+       SELECT ALL BAR
+    ═══════════════════════════════════════════════════════════════ */
+    .select-all-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .checkbox {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+    }
+
+    .checkbox.checked {
+      background: var(--purple);
+      border-color: var(--purple);
+    }
+
+    .checkbox.checked::after {
+      content: "✓";
+      color: white;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .select-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       LIST ITEMS
+    ═══════════════════════════════════════════════════════════════ */
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .list-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      animation: fadeIn 0.2s ease;
+      transition: var(--transition);
+    }
+
+    .list-item.selected {
+      border-color: var(--purple);
+      background: rgba(168, 85, 247, 0.1);
+    }
+
+    .list-item.new {
+      animation: highlight 0.5s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes highlight {
+      0% { background: var(--green-bg); }
+      100% { background: var(--bg-card); }
+    }
+
+    .list-item.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .list-item__header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .item-checkbox {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+
+    .item-checkbox.checked {
+      background: var(--purple);
+      border-color: var(--purple);
+    }
+
+    .item-checkbox.checked::after {
+      content: "✓";
+      color: white;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .list-item__row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex: 1;
+    }
+
+    .list-item__phone {
+      font-family: 'SF Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .list-item__name {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .list-item__right {
+      text-align: right;
+    }
+
+    .list-item__amount {
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .list-item__amount.green { color: var(--green); }
+    .list-item__amount.gold { color: var(--gold); }
+
+    .list-item__time {
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+
+    .list-item__actions {
+      display: flex;
+      gap: 6px;
+      margin-left: 26px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       BUTTONS
+    ═══════════════════════════════════════════════════════════════ */
+    .btn {
+      flex: 1;
+      padding: 8px 10px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    .btn-approve { background: var(--green); color: white; }
+    .btn-reject { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); }
+    .btn-cancel { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+
+    /* ═══════════════════════════════════════════════════════════════
+       EMPTY STATE
+    ═══════════════════════════════════════════════════════════════ */
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+
+    .empty-text {
+      font-size: 12px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       LOADING
+    ═══════════════════════════════════════════════════════════════ */
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 6px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-more {
+      text-align: center;
+      padding: 16px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       TOAST NOTIFICATIONS
+    ═══════════════════════════════════════════════════════════════ */
+    .toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 600;
+      z-index: 1000;
+      opacity: 0;
+      transition: all 0.3s ease;
+      max-width: 90%;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success { border-color: var(--green); color: var(--green); }
+    .toast.error { border-color: var(--red); color: var(--red); }
+
+    /* ═══════════════════════════════════════════════════════════════
+       MODAL
+    ═══════════════════════════════════════════════════════════════ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-overlay.show { display: flex; }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      max-width: 320px;
+      width: 100%;
+    }
+
+    .modal h3 {
+      font-size: 14px;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .modal textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12px;
+      resize: none;
+      margin-bottom: 12px;
+    }
+
+    .modal textarea:focus {
+      outline: none;
+      border-color: var(--gold);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .modal-actions .btn {
+      padding: 10px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       SECTIONS
+    ═══════════════════════════════════════════════════════════════ */
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       SLEEP MODE WARNING
+    ═══════════════════════════════════════════════════════════════ */
+    .sleep-warning {
+      background: var(--red-bg);
+      border: 1px solid var(--gold);
+      border-radius: var(--radius);
+      padding: 8px;
+      margin-bottom: 10px;
+      font-size: 10px;
+      color: var(--gold);
+      text-align: center;
+      display: none;
+    }
+
+    .sleep-warning.show {
+      display: block;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       AUTO REFRESH BADGE
+    ═══════════════════════════════════════════════════════════════ */
+    .auto-refresh-badge {
+      position: absolute;
+      top: 10px;
+      right: 60px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 4px 10px;
+      font-size: 9px;
+      color: var(--text-muted);
+      display: none;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .auto-refresh-badge .dot {
+      width: 6px;
+      height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: blink 2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════════════════════ */
+    @media (max-width: 600px) {
+      .info-row {
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+      }
+
+      .info-value {
+        font-size: 16px;
+      }
+
+      .info-label {
+        font-size: 8px;
+      }
+
+      .bulk-action-content {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .bulk-actions {
+        width: 100%;
+      }
+
+      .btn-bulk {
+        flex: 1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Refresh Indicator -->
+  <div class="refresh-indicator" id="refreshIndicator"></div>
+
+  <!-- Header (Sticky) -->
+  <header class="header">
+    <div class="header-content">
+      <!-- Auto Refresh Badge -->
+      <div class="auto-refresh-badge" id="autoRefreshBadge">
+        <div class="dot"></div>
+        <span>Live</span>
+      </div>
+
+      <div class="header-top">
+        <div>
+          <h1>📊 SubAdmin Panel</h1>
+          <p id="userInfo">Loading...</p>
+        </div>
+        <div class="status-toggle">
+          <span class="status-label active" id="statusLabel">ACTIVE</span>
+          <div class="toggle-switch active" id="toggleSwitch"></div>
+        </div>
+      </div>
+
+      <!-- Sleep Warning -->
+      <div class="sleep-warning" id="sleepWarning">
+        😴 Sleep mode active. Toggle to ACTIVE to approve/reject.
+      </div>
+
+      <!-- Balance + Stats Row -->
+      <div class="info-row">
+        <div class="info-card balance">
+          <div class="info-value zero" id="balanceValue">0</div>
+          <div class="info-label">Balance</div>
+        </div>
+        <div class="info-card deposits">
+          <div class="info-value green" id="depositCount">0</div>
+          <div class="info-label">Deposits</div>
+        </div>
+        <div class="info-card withdraws">
+          <div class="info-value gold" id="withdrawCount">0</div>
+          <div class="info-label">Withdraws</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab="deposits">
+          💳 Deposits <span class="count" id="tabDepCount">0</span>
+        </button>
+        <button class="tab" data-tab="withdraws">
+          💸 Withdraws <span class="count" id="tabWdCount">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Deposits Section -->
+    <section class="section active" id="depositsSection">
+      <!-- Select All -->
+      <div class="select-all-bar" id="depositSelectAll" style="display:none;">
+        <div class="checkbox-wrapper" onclick="UI.toggleSelectAll('deposits')">
+          <div class="checkbox" id="depositSelectAllCheckbox"></div>
+          <span class="select-label">Select All</span>
+        </div>
+      </div>
+
+      <div class="loading" id="depLoading">
+        <div class="spinner"></div>
+        <div>Loading...</div>
+      </div>
+      <div class="list" id="depositsList"></div>
+      <div class="loading-more" id="depLoadingMore" style="display:none;">
+        <div class="spinner"></div>
+        Loading more...
+      </div>
+      <div class="empty" id="depEmpty" style="display:none;">
+        <div class="empty-icon">✅</div>
+        <div class="empty-text">No pending deposits</div>
+      </div>
+    </section>
+
+    <!-- Withdraws Section -->
+    <section class="section" id="withdrawsSection">
+      <!-- Select All -->
+      <div class="select-all-bar" id="withdrawSelectAll" style="display:none;">
+        <div class="checkbox-wrapper" onclick="UI.toggleSelectAll('withdraws')">
+          <div class="checkbox" id="withdrawSelectAllCheckbox"></div>
+          <span class="select-label">Select All</span>
+        </div>
+      </div>
+
+      <div class="loading" id="wdLoading">
+        <div class="spinner"></div>
+        <div>Loading...</div>
+      </div>
+      <div class="list" id="withdrawsList"></div>
+      <div class="loading-more" id="wdLoadingMore" style="display:none;">
+        <div class="spinner"></div>
+        Loading more...
+      </div>
+      <div class="empty" id="wdEmpty" style="display:none;">
+        <div class="empty-icon">✅</div>
+        <div class="empty-text">No pending withdrawals</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Bulk Action Bar (Bottom Sticky) -->
+  <div class="bulk-action-bar" id="bulkActionBar">
+    <div class="bulk-action-content">
+      <div class="bulk-info">
+        <div class="bulk-count" id="bulkCount">0 selected</div>
+        <div class="bulk-total" id="bulkTotal">Total: 0 Birr</div>
+      </div>
+      <div class="bulk-actions">
+        <button class="btn-bulk btn-bulk-clear" id="bulkClear">Clear</button>
+        <button class="btn-bulk btn-bulk-approve" id="bulkApprove">✓ Approve All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Reject Modal -->
+  <div class="modal-overlay" id="rejectModal">
+    <div class="modal">
+      <h3>❌ Reject Request</h3>
+      <textarea id="rejectReason" rows="3" placeholder="Reason (optional)..."></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-cancel" id="cancelReject">Cancel</button>
+        <button class="btn btn-reject" id="confirmReject">Reject</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    /* ═══════════════════════════════════════════════════════════════
+       INITIALIZATION & CONFIGURATION
+    ═══════════════════════════════════════════════════════════════ */
+
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.setBackgroundColor("#0f0f0f");
+      tg.setHeaderColor("#0f0f0f");
+    }
+
+    const CONFIG = {
+      BASE_URL: window.location.pathname.replace(/\/$/, ""),
+      AUTO_REFRESH_INTERVAL: 10000,
+      SCROLL_THRESHOLD: 200,
+      PAGE_SIZE: 50,
+      TOAST_DURATION: 2500,
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       UTILITY FUNCTIONS
+    ═══════════════════════════════════════════════════════════════ */
+
+    const Utils = {
+      /**
+       * Get element by ID
+       */
+      $: (id) => document.getElementById(id),
+
+      /**
+       * Query selector all
+       */
+      $$: (sel) => document.querySelectorAll(sel),
+
+      /**
+       * Format amount with 2 decimals
+       */
+      formatAmount: (n) => {
+        return Number(n || 0).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+      },
+
+      /**
+       * Format time relative to now
+       */
+      formatTime: (d) => {
+        if (!d) return "";
+        const dt = new Date(d);
+        const now = new Date();
+        const diff = now - dt;
+
+        if (diff < 60000) return "now";
+        if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+        if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+        return dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+      },
+
+      /**
+       * Escape HTML special characters
+       */
+      escapeHtml: (s) => {
+        return String(s || "").replace(/[&<>"']/g, (c) => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        }[c]));
+      },
+
+      /**
+       * Show toast notification
+       */
+      showToast: (msg, type = "success") => {
+        const toast = Utils.$("toast");
+        toast.textContent = msg;
+        toast.className = `toast ${type} show`;
+        setTimeout(() => toast.classList.remove("show"), CONFIG.TOAST_DURATION);
+      },
+
+      /**
+       * Trigger haptic feedback
+       */
+      haptic: (type = "light") => {
+        try {
+          tg?.HapticFeedback?.impactOccurred(type);
+        } catch {}
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       API SERVICE
+    ═══════════════════════════════════════════════════════════════ */
+
+    const API = {
+      /**
+       * Make API request
+       */
+      request: async (endpoint, options = {}) => {
+        try {
+          const res = await fetch(`${CONFIG.BASE_URL}${endpoint}`, {
+            credentials: "include",
+            ...options,
+            headers: {
+              "Content-Type": "application/json",
+              ...(options.headers || {}),
+            },
+          });
+          return await res.json();
+        } catch (e) {
+          return { ok: false, error: e.message };
+        }
+      },
+
+      /**
+       * Authenticate user
+       */
+      auth: () => {
+        return API.request("/api/auth", {
+          method: "POST",
+          body: JSON.stringify({ initData: tg?.initData || "" }),
+        });
+      },
+
+      /**
+       * Toggle status
+       */
+      toggleStatus: () => {
+        return API.request("/api/toggle-status", { method: "POST" });
+      },
+
+      /**
+       * Get statistics
+       */
+      getStats: () => {
+        return API.request("/api/stats");
+      },
+
+      /**
+       * Get deposits
+       */
+      getDeposits: (params = {}) => {
+        const query = new URLSearchParams(params);
+        return API.request(`/api/deposits?${query}`);
+      },
+
+      /**
+       * Get withdrawals
+       */
+      getWithdraws: (params = {}) => {
+        const query = new URLSearchParams(params);
+        return API.request(`/api/withdraws?${query}`);
+      },
+
+      /**
+       * Approve deposit
+       */
+      approveDeposit: (id) => {
+        return API.request(`/api/deposits/${id}/approve`, { method: "POST" });
+      },
+
+      /**
+       * Bulk approve deposits
+       */
+      bulkApproveDeposits: (ids) => {
+        return API.request("/api/deposits/bulk-approve", {
+          method: "POST",
+          body: JSON.stringify({ ids }),
+        });
+      },
+
+      /**
+       * Reject deposit
+       */
+      rejectDeposit: (id, reason) => {
+        return API.request(`/api/deposits/${id}/reject`, {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        });
+      },
+
+      /**
+       * Approve withdrawal
+       */
+      approveWithdraw: (id) => {
+        return API.request(`/api/withdraws/${id}/approve`, { method: "POST" });
+      },
+
+      /**
+       * Bulk approve withdrawals
+       */
+      bulkApproveWithdraws: (ids) => {
+        return API.request("/api/withdraws/bulk-approve", {
+          method: "POST",
+          body: JSON.stringify({ ids }),
+        });
+      },
+
+      /**
+       * Reject withdrawal
+       */
+      rejectWithdraw: (id, reason) => {
+        return API.request(`/api/withdraws/${id}/reject`, {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        });
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       STATE MANAGEMENT
+    ═══════════════════════════════════════════════════════════════ */
+
+    const State = {
+      currentTab: "deposits",
+      balance: 0,
+      status: "active",
+      autoRefreshTimer: null,
+      rejectTarget: null,
+
+      deposits: {
+        items: [],
+        cursor: null,
+        hasMore: true,
+        loading: false,
+        ids: new Set(),
+        selected: new Set(),
+      },
+
+      withdraws: {
+        items: [],
+        cursor: null,
+        hasMore: true,
+        loading: false,
+        ids: new Set(),
+        selected: new Set(),
+      },
+
+      /**
+       * Get current collection
+       */
+      getCurrentCollection() {
+        return this[this.currentTab];
+      },
+
+      /**
+       * Reset collection
+       */
+      resetCollection(type) {
+        this[type].items = [];
+        this[type].cursor = null;
+        this[type].hasMore = true;
+        this[type].loading = false;
+        this[type].ids.clear();
+      },
+
+      /**
+       * Add items to collection
+       */
+      addItems(type, items, append = false) {
+        const collection = this[type];
+        const newItems = items.filter((item) => !collection.ids.has(item.id));
+        newItems.forEach((item) => collection.ids.add(item.id));
+
+        if (append) {
+          collection.items = [...collection.items, ...newItems];
+        } else {
+          collection.items = newItems;
+        }
+
+        return newItems;
+      },
+
+      /**
+       * Remove item from collection
+       */
+      removeItem(type, id) {
+        this[type].items = this[type].items.filter((item) => item.id !== id);
+        this[type].ids.delete(id);
+        this[type].selected.delete(id);
+      },
+
+      /**
+       * Clear all selections
+       */
+      clearSelections() {
+        this.deposits.selected.clear();
+        this.withdraws.selected.clear();
+      },
+
+      /**
+       * Get total selected count
+       */
+      getTotalSelected() {
+        return this.deposits.selected.size + this.withdraws.selected.size;
+      },
+
+      /**
+       * Get selected items
+       */
+      getSelectedItems(type) {
+        return this[type].items.filter((item) => this[type].selected.has(item.id));
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       UI CONTROLLERS
+    ═══════════════════════════════════════════════════════════════ */
+
+    const UI = {
+      /**
+       * Update balance display
+       */
+      updateBalance(balance) {
+        State.balance = Number(balance || 0);
+        const el = Utils.$("balanceValue");
+        el.textContent = Utils.formatAmount(State.balance);
+        el.className =
+          "info-value " +
+          (State.balance > 0 ? "positive" : State.balance < 0 ? "negative" : "zero");
+      },
+
+      /**
+       * Update status display
+       */
+      updateStatus(status) {
+        State.status = String(status || "active").toLowerCase();
+        const isActive = State.status === "active";
+
+        const toggle = Utils.$("toggleSwitch");
+        const label = Utils.$("statusLabel");
+        const warning = Utils.$("sleepWarning");
+
+        if (isActive) {
+          toggle.classList.add("active");
+          label.textContent = "ACTIVE";
+          label.className = "status-label active";
+          warning.classList.remove("show");
+        } else {
+          toggle.classList.remove("active");
+          label.textContent = "SLEEP";
+          label.className = "status-label sleep";
+          warning.classList.add("show");
+          State.clearSelections();
+          this.updateAllSelections("deposits");
+          this.updateAllSelections("withdraws");
+        }
+
+        Utils.$$(".list-item").forEach((item) => {
+          item.classList.toggle("disabled", !isActive);
+        });
+      },
+
+      /**
+       * Update stats display
+       */
+      updateStats(deposits, withdraws) {
+        Utils.$("depositCount").textContent = deposits.count || 0;
+        Utils.$("tabDepCount").textContent = deposits.count || 0;
+        Utils.$("withdrawCount").textContent = withdraws.count || 0;
+        Utils.$("tabWdCount").textContent = withdraws.count || 0;
+      },
+
+      /**
+       * Toggle selection for item
+       */
+      toggleSelection(type, id) {
+        if (State.status !== "active") {
+          Utils.showToast("Enable active mode", "error");
+          return;
+        }
+
+        Utils.haptic("selection");
+        const selectedSet = State[type].selected;
+
+        if (selectedSet.has(id)) {
+          selectedSet.delete(id);
+        } else {
+          selectedSet.add(id);
+        }
+
+        this.updateSelectionUI(type, id);
+        this.updateBulkActionBar();
+      },
+
+      /**
+       * Toggle select all
+       */
+      toggleSelectAll(type) {
+        if (State.status !== "active") {
+          Utils.showToast("Enable active mode", "error");
+          return;
+        }
+
+        Utils.haptic("medium");
+        const selectedSet = State[type].selected;
+        const allIds = State[type].items.map((item) => item.id);
+
+        if (selectedSet.size === allIds.length) {
+          selectedSet.clear();
+        } else {
+          allIds.forEach((id) => selectedSet.add(id));
+        }
+
+        this.updateAllSelections(type);
+        this.updateBulkActionBar();
+      },
+
+      /**
+       * Clear all selections
+       */
+      clearSelections() {
+        Utils.haptic("light");
+        State.clearSelections();
+        this.updateAllSelections("deposits");
+        this.updateAllSelections("withdraws");
+        this.updateBulkActionBar();
+      },
+
+      /**
+       * Update selection UI for single item
+       */
+      updateSelectionUI(type, id) {
+        const prefix = type === "deposits" ? "dep" : "wd";
+        const checkbox = document.querySelector(`#${prefix}-${id} .item-checkbox`);
+        const item = Utils.$(`${prefix}-${id}`);
+
+        if (checkbox && item) {
+          const isSelected = State[type].selected.has(id);
+          checkbox.classList.toggle("checked", isSelected);
+          item.classList.toggle("selected", isSelected);
+        }
+
+        this.updateSelectAllCheckbox(type);
+      },
+
+      /**
+       * Update all selections UI
+       */
+      updateAllSelections(type) {
+        State[type].items.forEach((item) => {
+          this.updateSelectionUI(type, item.id);
+        });
+      },
+
+      /**
+       * Update select all checkbox
+       */
+      updateSelectAllCheckbox(type) {
+        const checkbox = Utils.$(`${type}SelectAllCheckbox`);
+        if (!checkbox) return;
+
+        const allIds = State[type].items.map((item) => item.id);
+        const selectedCount = Array.from(State[type].selected).filter((id) =>
+          allIds.includes(id)
+        ).length;
+
+        checkbox.classList.toggle(
+          "checked",
+          selectedCount > 0 && selectedCount === allIds.length
+        );
+      },
+
+      /**
+       * Update bulk action bar
+       */
+      updateBulkActionBar() {
+        const totalSelected = State.getTotalSelected();
+        const bar = Utils.$("bulkActionBar");
+
+        if (totalSelected > 0) {
+          bar.classList.add("show");
+
+          let totalAmount = 0;
+
+          State.deposits.items.forEach((item) => {
+            if (State.deposits.selected.has(item.id)) {
+              totalAmount += item.amount;
+            }
+          });
+
+          State.withdraws.items.forEach((item) => {
+            if (State.withdraws.selected.has(item.id)) {
+              totalAmount += item.amount;
+            }
+          });
+
+          Utils.$("bulkCount").textContent = `${totalSelected} selected`;
+          Utils.$("bulkTotal").textContent = `Total: ${Utils.formatAmount(totalAmount)} Birr`;
+        } else {
+          bar.classList.remove("show");
+        }
+      },
+
+      /**
+       * Show loading indicator
+       */
+      showLoading(type, more = false) {
+        if (more) {
+          Utils.$(`${type === "deposits" ? "dep" : "wd"}LoadingMore`).style.display = "block";
+        } else {
+          Utils.$(`${type === "deposits" ? "dep" : "wd"}Loading`).style.display = "block";
+        }
+      },
+
+      /**
+       * Hide loading indicator
+       */
+      hideLoading(type) {
+        Utils.$(`${type === "deposits" ? "dep" : "wd"}Loading`).style.display = "none";
+        Utils.$(`${type === "deposits" ? "dep" : "wd"}LoadingMore`).style.display = "none";
+      },
+
+      /**
+       * Show empty state
+       */
+      showEmpty(type) {
+        Utils.$(`${type === "deposits" ? "dep" : "wd"}Empty`).style.display = "block";
+        Utils.$(`${type === "deposits" ? "dep" : "wd"}SelectAll`).style.display = "none";
+      },
+
+      /**
+       * Hide empty state
+       */
+      hideEmpty(type) {
+        Utils.$(`${type === "deposits" ? "dep" : "wd"}Empty`).style.display = "none";
+        Utils.$(`${type === "deposits" ? "dep" : "wd"}SelectAll`).style.display = "flex";
+      },
+
+      /**
+       * Switch tabs
+       */
+      switchTab(tab) {
+        State.currentTab = tab;
+        Utils.$$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
+        Utils.$$(".section").forEach((s) => s.classList.toggle("active", s.id === `${tab}Section`));
+        this.updateBulkActionBar();
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       RENDER FUNCTIONS
+    ═══════════════════════════════════════════════════════════════ */
+
+    const Render = {
+      /**
+       * Render deposit item
+       */
+      depositItem(deposit, prepend = false) {
+        const div = document.createElement("div");
+        div.className = `list-item ${State.status !== "active" ? "disabled" : ""} ${
+          prepend ? "new" : ""
+        } ${State.deposits.selected.has(deposit.id) ? "selected" : ""}`;
+        div.id = `dep-${deposit.id}`;
+        div.innerHTML = `
+          <div class="list-item__header">
+            <div class="item-checkbox ${
+              State.deposits.selected.has(deposit.id) ? "checked" : ""
+            }" onclick="UI.toggleSelection('deposits', '${deposit.id}')"></div>
+            <div class="list-item__row">
+              <div>
+                <div class="list-item__phone">📱 ${Utils.escapeHtml(deposit.senderPhone)}</div>
+              </div>
+              <div class="list-item__right">
+                <div class="list-item__amount green">+${Utils.formatAmount(deposit.amount)}</div>
+                <div class="list-item__time">${Utils.formatTime(deposit.createdAt)}</div>
+              </div>
+            </div>
+          </div>
+          <div class="list-item__actions">
+            <button class="btn btn-approve" onclick="Actions.approveDeposit('${deposit.id}')">✓ Approve</button>
+            <button class="btn btn-reject" onclick="Actions.openRejectModal('deposit', '${
+              deposit.id
+            }')">✗ Reject</button>
+          </div>
+        `;
+        return div;
+      },
+
+      /**
+       * Render withdrawal item
+       */
+      withdrawItem(withdraw, prepend = false) {
+        const div = document.createElement("div");
+        div.className = `list-item ${State.status !== "active" ? "disabled" : ""} ${
+          prepend ? "new" : ""
+        } ${State.withdraws.selected.has(withdraw.id) ? "selected" : ""}`;
+        div.id = `wd-${withdraw.id}`;
+        div.innerHTML = `
+          <div class="list-item__header">
+            <div class="item-checkbox ${
+              State.withdraws.selected.has(withdraw.id) ? "checked" : ""
+            }" onclick="UI.toggleSelection('withdraws', '${withdraw.id}')"></div>
+            <div class="list-item__row">
+              <div>
+                <div class="list-item__phone">📱 ${Utils.escapeHtml(withdraw.receiverPhone)}</div>
+                <div class="list-item__name">👤 ${Utils.escapeHtml(
+                  withdraw.receiverFirstName
+                ) || "—"}</div>
+              </div>
+              <div class="list-item__right">
+                <div class="list-item__amount gold">-${Utils.formatAmount(withdraw.amount)}</div>
+                <div class="list-item__time">${Utils.formatTime(withdraw.createdAt)}</div>
+              </div>
+            </div>
+          </div>
+          <div class="list-item__actions">
+            <button class="btn btn-approve" onclick="Actions.approveWithdraw('${withdraw.id}')">✓ Approve</button>
+            <button class="btn btn-reject" onclick="Actions.openRejectModal('withdraw', '${
+              withdraw.id
+            }')">✗ Reject</button>
+          </div>
+        `;
+        return div;
+      },
+
+      /**
+       * Render deposits list
+       */
+      deposits(items, append = false, prepend = false) {
+        const list = Utils.$("depositsList");
+        if (!append) list.innerHTML = "";
+
+        items.forEach((deposit) => {
+          if (Utils.$(`dep-${deposit.id}`)) return;
+          const item = this.depositItem(deposit, prepend);
+          if (prepend) {
+            list.insertBefore(item, list.firstChild);
+          } else {
+            list.appendChild(item);
+          }
+        });
+      },
+
+      /**
+       * Render withdrawals list
+       */
+      withdraws(items, append = false, prepend = false) {
+        const list = Utils.$("withdrawsList");
+        if (!append) list.innerHTML = "";
+
+        items.forEach((withdraw) => {
+          if (Utils.$(`wd-${withdraw.id}`)) return;
+          const item = this.withdrawItem(withdraw, prepend);
+          if (prepend) {
+            list.insertBefore(item, list.firstChild);
+          } else {
+            list.appendChild(item);
+          }
+        });
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       ACTION HANDLERS
+    ═══════════════════════════════════════════════════════════════ */
+
+    const Actions = {
+      /**
+       * Authenticate user
+       */
+      async authenticate() {
+        const r = await API.auth();
+        if (!r.ok) throw new Error(r.error || "AUTH_FAILED");
+
+        Utils.$("userInfo").textContent = `👤 ${r.subadmin.username}`;
+        UI.updateBalance(r.subadmin.balance || 0);
+        UI.updateStatus(r.subadmin.status || "active");
+
+        return r.subadmin;
+      },
+
+      /**
+       * Toggle status
+       */
+      async toggleStatus() {
+        Utils.haptic("medium");
+        const r = await API.toggleStatus();
+
+        if (r.ok) {
+          UI.updateStatus(r.status);
+          Utils.showToast(r.status === "active" ? "✓ Active" : "😴 Sleep");
+        } else {
+          Utils.showToast("Failed", "error");
+        }
+      },
+
+      /**
+       * Load statistics
+       */
+      async loadStats(silent = false) {
+        if (!silent) {
+          Utils.$("refreshIndicator").classList.add("active");
+        }
+
+        const r = await API.getStats();
+
+        Utils.$("refreshIndicator").classList.remove("active");
+
+        if (!r.ok) return;
+
+        UI.updateStats(r.deposits, r.withdraws);
+        if (r.balance !== undefined) UI.updateBalance(r.balance);
+        if (r.status) UI.updateStatus(r.status);
+      },
+
+      /**
+       * Load deposits
+       */
+      async loadDeposits(append = false) {
+        const s = State.deposits;
+        if (s.loading) return;
+
+        s.loading = true;
+
+        if (!append) {
+          UI.showLoading("deposits");
+          State.resetCollection("deposits");
+        } else {
+          UI.showLoading("deposits", true);
+        }
+
+        const params = { limit: CONFIG.PAGE_SIZE };
+        if (s.cursor) params.cursor = s.cursor;
+
+        const r = await API.getDeposits(params);
+        s.loading = false;
+        UI.hideLoading("deposits");
+
+        if (!r.ok) {
+          Utils.showToast("Load failed", "error");
+          return;
+        }
+
+        const newItems = State.addItems("deposits", r.items, append);
+        s.hasMore = r.hasMore;
+        s.cursor = r.nextCursor;
+
+        Render.deposits(newItems, append);
+
+        if (s.items.length === 0) {
+          UI.showEmpty("deposits");
+        } else {
+          UI.hideEmpty("deposits");
+        }
+
+        UI.updateSelectAllCheckbox("deposits");
+      },
+
+      /**
+       * Check for new deposits
+       */
+      async checkNewDeposits() {
+        if (State.currentTab !== "deposits") return;
+
+        const r = await API.getDeposits({ limit: 10 });
+        if (!r.ok) return;
+
+        const s = State.deposits;
+        const newItems = r.items.filter((item) => !s.ids.has(item.id));
+
+        if (newItems.length > 0) {
+          State.addItems("deposits", newItems, false);
+          s.items = [...newItems, ...s.items];
+          Render.deposits(newItems, false, true);
+          this.loadStats(true);
+          Utils.haptic("light");
+          UI.hideEmpty("deposits");
+        }
+      },
+
+      /**
+       * Approve deposit
+       */
+      async approveDeposit(id) {
+        if (State.status !== "active") {
+          Utils.showToast("Enable active mode", "error");
+          return;
+        }
+
+        Utils.haptic("medium");
+        const btn = document.querySelector(`#dep-${id} .btn-approve`);
+        if (btn) btn.disabled = true;
+
+        const r = await API.approveDeposit(id);
+
+        if (r.ok) {
+          Utils.showToast("✓ Approved!");
+          Utils.haptic("success");
+          UI.updateBalance(r.newBalance);
+          Utils.$(`dep-${id}`)?.remove();
+          State.removeItem("deposits", id);
+          this.loadStats(true);
+          UI.updateBulkActionBar();
+
+          if (State.deposits.items.length === 0) {
+            this.loadDeposits();
+          } else {
+            UI.updateSelectAllCheckbox("deposits");
+          }
+        } else {
+          Utils.showToast(r.error === "SLEEP_MODE" ? "Enable active mode" : r.error, "error");
+          if (btn) btn.disabled = false;
+        }
+      },
+
+      /**
+       * Load withdrawals
+       */
+      async loadWithdraws(append = false) {
+        const s = State.withdraws;
+        if (s.loading) return;
+
+        s.loading = true;
+
+        if (!append) {
+          UI.showLoading("withdraws");
+          State.resetCollection("withdraws");
+        } else {
+          UI.showLoading("withdraws", true);
+        }
+
+        const params = { limit: CONFIG.PAGE_SIZE };
+        if (s.cursor) params.cursor = s.cursor;
+
+        const r = await API.getWithdraws(params);
+        s.loading = false;
+        UI.hideLoading("withdraws");
+
+        if (!r.ok) {
+          Utils.showToast("Load failed", "error");
+          return;
+        }
+
+        const newItems = State.addItems("withdraws", r.items, append);
+        s.hasMore = r.hasMore;
+        s.cursor = r.nextCursor;
+
+        Render.withdraws(newItems, append);
+
+        if (s.items.length === 0) {
+          UI.showEmpty("withdraws");
+        } else {
+          UI.hideEmpty("withdraws");
+        }
+
+        UI.updateSelectAllCheckbox("withdraws");
+      },
+
+      /**
+       * Check for new withdrawals
+       */
+      async checkNewWithdraws() {
+        if (State.currentTab !== "withdraws") return;
+
+        const r = await API.getWithdraws({ limit: 10 });
+        if (!r.ok) return;
+
+        const s = State.withdraws;
+        const newItems = r.items.filter((item) => !s.ids.has(item.id));
+
+        if (newItems.length > 0) {
+          State.addItems("withdraws", newItems, false);
+          s.items = [...newItems, ...s.items];
+          Render.withdraws(newItems, false, true);
+          this.loadStats(true);
+          Utils.haptic("light");
+          UI.hideEmpty("withdraws");
+        }
+      },
+
+      /**
+       * Approve withdrawal
+       */
+      async approveWithdraw(id) {
+        if (State.status !== "active") {
+          Utils.showToast("Enable active mode", "error");
+          return;
+        }
+
+        Utils.haptic("medium");
+        const btn = document.querySelector(`#wd-${id} .btn-approve`);
+        if (btn) btn.disabled = true;
+
+        const r = await API.approveWithdraw(id);
+
+        if (r.ok) {
+          Utils.showToast("✓ Approved!");
+          Utils.haptic("success");
+          UI.updateBalance(r.newBalance);
+          Utils.$(`wd-${id}`)?.remove();
+          State.removeItem("withdraws", id);
+          this.loadStats(true);
+          UI.updateBulkActionBar();
+
+          if (State.withdraws.items.length === 0) {
+            this.loadWithdraws();
+          } else {
+            UI.updateSelectAllCheckbox("withdraws");
+          }
+        } else {
+          Utils.showToast(r.error === "SLEEP_MODE" ? "Enable active mode" : r.error, "error");
+          if (btn) btn.disabled = false;
+        }
+      },
+
+      /**
+       * Bulk approve selected items
+       */
+      async bulkApproveSelected() {
+        if (State.status !== "active") {
+          Utils.showToast("Enable active mode", "error");
+          return;
+        }
+
+        const depositIds = Array.from(State.deposits.selected);
+        const withdrawIds = Array.from(State.withdraws.selected);
+
+        if (depositIds.length === 0 && withdrawIds.length === 0) {
+          Utils.showToast("No items selected", "error");
+          return;
+        }
+
+        Utils.haptic("heavy");
+        Utils.$("bulkApprove").disabled = true;
+
+        let totalApproved = 0;
+        let totalFailed = 0;
+
+        // Bulk approve deposits
+        if (depositIds.length > 0) {
+          const r = await API.bulkApproveDeposits(depositIds);
+
+          if (r.ok) {
+            totalApproved += r.approved;
+            totalFailed += r.failed;
+            UI.updateBalance(r.newBalance);
+
+            depositIds.forEach((id) => {
+              Utils.$(`dep-${id}`)?.remove();
+              State.removeItem("deposits", id);
+            });
+          } else {
+            totalFailed += depositIds.length;
+          }
+        }
+
+        // Bulk approve withdrawals
+        if (withdrawIds.length > 0) {
+          const r = await API.bulkApproveWithdraws(withdrawIds);
+
+          if (r.ok) {
+            totalApproved += r.approved;
+            totalFailed += r.failed;
+            UI.updateBalance(r.newBalance);
+
+            withdrawIds.forEach((id) => {
+              Utils.$(`wd-${id}`)?.remove();
+              State.removeItem("withdraws", id);
+            });
+          } else {
+            totalFailed += withdrawIds.length;
+          }
+        }
+
+        Utils.$("bulkApprove").disabled = false;
+
+        if (totalApproved > 0) {
+          Utils.showToast(
+            `✓ ${totalApproved} approved${totalFailed > 0 ? `, ${totalFailed} failed` : ""}`,
+            "success"
+          );
+          Utils.haptic("success");
+        } else {
+          Utils.showToast("All failed", "error");
+        }
+
+        UI.clearSelections();
+        this.loadStats(true);
+
+        // Reload if empty
+        if (State.deposits.items.length === 0 && State.currentTab === "deposits") {
+          this.loadDeposits();
+        }
+        if (State.withdraws.items.length === 0 && State.currentTab === "withdraws") {
+          this.loadWithdraws();
+        }
+      },
+
+      /**
+       * Open reject modal
+       */
+      openRejectModal(type, id) {
+        if (State.status !== "active") {
+          Utils.showToast("Enable active mode", "error");
+          return;
+        }
+
+        Utils.haptic("light");
+        State.rejectTarget = { type, id };
+        Utils.$("rejectReason").value = "";
+        Utils.$("rejectModal").classList.add("show");
+      },
+
+      /**
+       * Close reject modal
+       */
+      closeRejectModal() {
+        Utils.$("rejectModal").classList.remove("show");
+        State.rejectTarget = null;
+      },
+
+      /**
+       * Confirm rejection
+       */
+      async confirmReject() {
+        if (!State.rejectTarget) return;
+
+        const { type, id } = State.rejectTarget;
+        const reason = Utils.$("rejectReason").value.trim();
+
+        Utils.$("confirmReject").disabled = true;
+
+        const r =
+          type === "deposit"
+            ? await API.rejectDeposit(id, reason)
+            : await API.rejectWithdraw(id, reason);
+
+        Utils.$("confirmReject").disabled = false;
+
+        if (r.ok) {
+          Utils.showToast("✗ Rejected");
+          Utils.haptic("warning");
+          this.closeRejectModal();
+
+          const elemId = type === "deposit" ? `dep-${id}` : `wd-${id}`;
+          Utils.$(elemId)?.remove();
+
+          const collectionType = type === "deposit" ? "deposits" : "withdraws";
+          State.removeItem(collectionType, id);
+
+          this.loadStats(true);
+          UI.updateBulkActionBar();
+
+          if (State[collectionType].items.length === 0) {
+            type === "deposit" ? this.loadDeposits() : this.loadWithdraws();
+          } else {
+            UI.updateSelectAllCheckbox(collectionType);
+          }
+        } else {
+          Utils.showToast(r.error === "SLEEP_MODE" ? "Enable active mode" : r.error, "error");
+        }
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       AUTO REFRESH
+    ═══════════════════════════════════════════════════════════════ */
+
+    const AutoRefresh = {
+      start() {
+        Utils.$("autoRefreshBadge").style.display = "flex";
+
+        State.autoRefreshTimer = setInterval(() => {
+          if (State.currentTab === "deposits") {
+            Actions.checkNewDeposits();
+          } else {
+            Actions.checkNewWithdraws();
+          }
+        }, CONFIG.AUTO_REFRESH_INTERVAL);
+      },
+
+      stop() {
+        if (State.autoRefreshTimer) {
+          clearInterval(State.autoRefreshTimer);
+          State.autoRefreshTimer = null;
+        }
+        Utils.$("autoRefreshBadge").style.display = "none";
+      },
+
+      setupVisibilityHandler() {
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            this.stop();
+          } else {
+            this.start();
+            if (State.currentTab === "deposits") {
+              Actions.checkNewDeposits();
+            } else {
+              Actions.checkNewWithdraws();
+            }
+          }
+        });
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       INFINITE SCROLL
+    ═══════════════════════════════════════════════════════════════ */
+
+    const InfiniteScroll = {
+      setup() {
+        window.addEventListener(
+          "scroll",
+          () => {
+            const scrollBottom = window.innerHeight + window.scrollY;
+            const docHeight = document.documentElement.scrollHeight;
+
+            if (scrollBottom >= docHeight - CONFIG.SCROLL_THRESHOLD) {
+              const collection = State.getCurrentCollection();
+
+              if (collection.hasMore && !collection.loading) {
+                if (State.currentTab === "deposits") {
+                  Actions.loadDeposits(true);
+                } else {
+                  Actions.loadWithdraws(true);
+                }
+              }
+            }
+          },
+          { passive: true }
+        );
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       EVENT LISTENERS
+    ═══════════════════════════════════════════════════════════════ */
+
+    const EventListeners = {
+      setup() {
+        // Toggle status
+        Utils.$("toggleSwitch").addEventListener("click", () => Actions.toggleStatus());
+
+        // Tabs
+        Utils.$$(".tab").forEach((tab) => {
+          tab.addEventListener("click", () => {
+            Utils.haptic("light");
+            const tabName = tab.dataset.tab;
+            UI.switchTab(tabName);
+
+            if (tabName === "deposits" && State.deposits.items.length === 0) {
+              Actions.loadDeposits();
+            } else if (tabName === "withdraws" && State.withdraws.items.length === 0) {
+              Actions.loadWithdraws();
+            }
+          });
+        });
+
+        // Bulk actions
+        Utils.$("bulkApprove").addEventListener("click", () => Actions.bulkApproveSelected());
+        Utils.$("bulkClear").addEventListener("click", () => UI.clearSelections());
+
+        // Reject modal
+        Utils.$("cancelReject").addEventListener("click", () => Actions.closeRejectModal());
+        Utils.$("confirmReject").addEventListener("click", () => Actions.confirmReject());
+      },
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       INITIALIZATION
+    ═══════════════════════════════════════════════════════════════ */
+
+    async function init() {
+      try {
+        await Actions.authenticate();
+        await Actions.loadStats();
+        await Actions.loadDeposits();
+
+        EventListeners.setup();
+        InfiniteScroll.setup();
+        AutoRefresh.setupVisibilityHandler();
+        AutoRefresh.start();
+      } catch (e) {
+        console.error("Init error:", e);
+        Utils.$("userInfo").textContent = `❌ ${e.message}`;
+        Utils.showToast("Auth failed", "error");
+      }
+    }
+
+    // Start application
+    init();
+
+    // Expose to global scope for inline event handlers
+    window.Actions = Actions;
+    window.UI = UI;
+  </script>
+</body>
+</html>

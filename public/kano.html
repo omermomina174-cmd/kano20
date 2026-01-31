@@ -1,0 +1,2203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0e17" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Blu Kano - Jackpot Game</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.2/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #0f1520;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2235;
+      --bg-input: #1f2937;
+
+      --gold-500: #fbbf24;
+      --gold-600: #f59e0b;
+      --gold-glow: rgba(251, 191, 36, 0.5);
+
+      --neon-purple: #8b5cf6;
+      --neon-purple-dim: #7c3aed;
+      --neon-purple-glow: rgba(139, 92, 246, 0.5);
+
+      --neon-green: #10b981;
+      --neon-green-glow: rgba(16, 185, 129, 0.5);
+
+      --neon-red: #ef4444;
+      --neon-cyan: #06b6d4;
+
+      --border-dim: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.08);
+      --border-bright: rgba(255, 255, 255, 0.12);
+      --border-gold: rgba(251, 191, 36, 0.3);
+
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-hint: #475569;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+      --radius-full: 9999px;
+
+      --font-sans: 'Inter', -apple-system, sans-serif;
+      --font-display: 'Orbitron', sans-serif;
+
+      --top-bar-height: 48px;
+      --nav-height: 64px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.4;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app {
+      height: 100svh;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, #0a0e17 0%, #111827 100%);
+    }
+
+    .hidden { display: none !important; }
+
+    /* ========== TOP BAR (FIXED) ========== */
+    .top-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-default);
+      height: var(--top-bar-height);
+    }
+
+    .top-bar-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-default);
+    }
+
+    .top-bar-item.timer-item {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(6, 182, 212, 0.1));
+      border-color: rgba(139, 92, 246, 0.3);
+    }
+
+    .top-bar-item.gold-item {
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.05));
+      border-color: var(--border-gold);
+    }
+
+    .top-bar-label {
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .top-bar-value {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text-primary);
+    }
+
+    .top-bar-value.timer {
+      color: var(--neon-purple);
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .top-bar-value.timer.warning { color: var(--gold-500); }
+    .top-bar-value.timer.danger {
+      color: var(--neon-red);
+      animation: pulse 0.5s ease-in-out infinite alternate;
+    }
+
+    .top-bar-value.gold { color: var(--gold-500); }
+
+    .top-bar-unit {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    @keyframes pulse {
+      from { opacity: 1; }
+      to { opacity: 0.6; }
+    }
+
+    /* ========== MAIN SCROLLABLE CONTENT ========== */
+    .main-scroll {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-top: var(--top-bar-height);
+      padding-bottom: calc(var(--nav-height) + var(--safe-bottom));
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .main-scroll::-webkit-scrollbar { width: 4px; }
+    .main-scroll::-webkit-scrollbar-thumb {
+      background: var(--gold-600);
+      border-radius: var(--radius-full);
+    }
+
+    .main-content {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ========== GAME STATUS ========== */
+    .game-status {
+      text-align: center;
+      padding: 10px 14px;
+      background: rgba(139, 92, 246, 0.1);
+      border-radius: var(--radius-md);
+      font-weight: 700;
+      color: var(--neon-purple);
+      font-size: 0.85rem;
+      border: 1px solid rgba(139, 92, 246, 0.2);
+    }
+
+    .game-status.drawing {
+      background: rgba(251, 191, 36, 0.1);
+      color: var(--gold-500);
+      border-color: var(--border-gold);
+    }
+
+    .game-status.hidden { display: none; }
+
+    /* ========== ODDS SECTION ========== */
+    .odds-section {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: 10px;
+      border: 1px solid var(--border-default);
+    }
+
+    .odds-row {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 4px;
+    }
+
+    .odds-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .odds-mult {
+      font-size: 0.6rem;
+      font-weight: 800;
+      color: var(--text-hint);
+      font-family: var(--font-display);
+      opacity: 0.4;
+      transition: all 0.2s;
+    }
+
+    .odds-mult.active {
+      color: var(--gold-500);
+      opacity: 1;
+    }
+
+    .odds-slot {
+      width: 100%;
+      aspect-ratio: 1;
+      max-height: 26px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1.5px dashed rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 800;
+      color: var(--text-hint);
+      transition: all 0.2s;
+    }
+
+    .odds-slot.filled {
+      background: linear-gradient(135deg, var(--neon-purple), var(--neon-purple-dim));
+      border: none;
+      color: white;
+      box-shadow: 0 2px 8px var(--neon-purple-glow);
+    }
+
+    .odds-match {
+      font-size: 0.55rem;
+      color: var(--text-hint);
+      font-weight: 700;
+      transition: color 0.2s;
+    }
+
+    .odds-match.active { color: var(--neon-purple); }
+
+    /* ========== NUMBERS GRID (THE HEART) ========== */
+    .numbers-section {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 10px;
+      border: 1px solid var(--border-gold);
+      box-shadow: 0 0 30px rgba(251, 191, 36, 0.1), inset 0 0 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .numbers-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      gap: 5px;
+    }
+
+    .num-btn {
+      aspect-ratio: 1;
+      width: 100%;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+      color: var(--text-secondary);
+      font-size: clamp(0.8rem, 3vw, 1.1rem);
+      font-weight: 700;
+      border: 1px solid var(--border-default);
+      cursor: pointer;
+      transition: all 0.12s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+      touch-action: manipulation;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .num-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.05) 100%);
+      pointer-events: none;
+    }
+
+    .num-btn:active:not(.disabled) { transform: scale(0.92); }
+
+    .num-btn.selected {
+      background: linear-gradient(145deg, var(--neon-purple) 0%, var(--neon-purple-dim) 100%);
+      border-color: var(--neon-purple);
+      color: white;
+      box-shadow: 0 0 15px var(--neon-purple-glow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transform: scale(1.02);
+    }
+
+    .num-btn.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* ========== BET CONTROLS ========== */
+    .bet-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-default);
+    }
+
+    .bet-field {
+      flex: 1;
+      position: relative;
+      height: 50px;
+    }
+
+    .bet-input {
+      width: 100%;
+      height: 100%;
+      padding: 0 48px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-bright);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      font-weight: 800;
+      text-align: center;
+      outline: none;
+      font-family: var(--font-display);
+      transition: all 0.2s;
+    }
+
+    .bet-input::-webkit-outer-spin-button,
+    .bet-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .bet-input:focus {
+      border-color: var(--neon-purple);
+      box-shadow: 0 0 0 3px var(--neon-purple-glow);
+    }
+
+    .step-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-bright);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-weight: 800;
+      font-size: 1.3rem;
+      cursor: pointer;
+      transition: all 0.12s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-btn:active {
+      background: var(--neon-purple);
+      border-color: var(--neon-purple);
+      color: white;
+      transform: translateY(-50%) scale(0.95);
+    }
+
+    .step-btn.minus { left: 5px; }
+    .step-btn.plus { right: 5px; }
+
+    .submit-btn {
+      height: 50px;
+      padding: 0 32px;
+      background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
+      border: none;
+      border-radius: var(--radius-md);
+      color: #0f172a;
+      font-size: 1rem;
+      font-weight: 900;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      box-shadow: 0 4px 20px var(--gold-glow);
+      transition: all 0.2s;
+      font-family: var(--font-display);
+    }
+
+    .submit-btn:active:not(:disabled) { transform: scale(0.97); }
+
+    .submit-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* ========== DRAW STAGE ========== */
+    .draw-stage {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      border: 1px solid var(--border-gold);
+      box-shadow: 0 0 30px rgba(251, 191, 36, 0.1);
+    }
+
+    .draw-stage.active { display: flex; }
+
+    .anim-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px 20px;
+      border-radius: var(--radius-md);
+      background: radial-gradient(ellipse at center, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
+      min-height: 180px;
+    }
+
+    .big-ball {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #fff 0%, var(--gold-500) 50%, var(--gold-600) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      font-weight: 900;
+      color: #0f172a;
+      opacity: 0;
+      transform: scale(0.9);
+      font-family: var(--font-display);
+      box-shadow: 0 4px 30px var(--gold-glow), inset 0 -4px 10px rgba(0,0,0,0.15);
+    }
+
+    .big-ball.matched {
+      background: linear-gradient(145deg, #34d399 0%, var(--neon-green) 100%);
+      color: white;
+      box-shadow: 0 0 40px var(--neon-green-glow), 0 0 80px var(--neon-green-glow);
+      animation: matchGlow 0.6s ease-out;
+    }
+
+    @keyframes matchGlow {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+
+    .ball-label {
+      margin-top: 14px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .result-container {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      animation: resultIn 0.4s ease-out;
+    }
+
+    .result-container.active { display: flex; }
+
+    @keyframes resultIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-text {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .result-text.win {
+      color: var(--neon-green);
+      text-shadow: 0 0 30px var(--neon-green-glow);
+    }
+
+    .result-text.lose { color: var(--text-muted); }
+
+    .result-amount {
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--neon-green);
+      display: none;
+    }
+
+    .result-amount.active {
+      display: block;
+      animation: amountPop 0.5s ease-out;
+    }
+
+    @keyframes amountPop {
+      0% { transform: scale(0.8); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .drawn-balls-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 5px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: var(--radius-md);
+    }
+
+    .drawn-ball {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #fff, var(--gold-500));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: #0f172a;
+      opacity: 0;
+      transform: scale(0.9);
+      box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+    }
+
+    .drawn-ball.matched {
+      background: linear-gradient(145deg, #34d399, var(--neon-green));
+      color: white;
+      box-shadow: 0 0 15px var(--neon-green-glow);
+    }
+
+    /* ========== WAITING MESSAGE ========== */
+    .waiting-message {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-default);
+      text-align: center;
+      padding: 40px 24px;
+      min-height: 200px;
+    }
+
+    .waiting-message.active { display: flex; }
+
+    .waiting-message h2 {
+      font-family: var(--font-display);
+      color: var(--neon-purple);
+      margin-bottom: 10px;
+      font-size: 1.2rem;
+    }
+
+    .waiting-message p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    /* ========== BETTING SECTION ========== */
+    .betting-section {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .betting-section.active { display: flex; }
+
+    /* ========== SECTION DIVIDER ========== */
+    .section-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 8px 0;
+    }
+
+    .section-divider__line {
+      flex: 1;
+      height: 1px;
+      background: var(--border-default);
+    }
+
+    .section-divider__text {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ========== TAB PANELS ========== */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px 20px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      font-weight: 500;
+      border: 1px dashed var(--border-default);
+    }
+
+    /* ========== TICKET ITEMS ========== */
+    .ticket-item {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border-default);
+    }
+
+    .ticket-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      font-size: 0.8rem;
+    }
+
+    .ticket-id {
+      color: var(--neon-purple);
+      font-weight: 700;
+    }
+
+    .ticket-bet {
+      color: var(--gold-500);
+      font-weight: 800;
+    }
+
+    .ticket-balls-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .ticket-ball {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--neon-purple), var(--neon-purple-dim));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: white;
+      box-shadow: 0 2px 6px var(--neon-purple-glow);
+      transition: all 0.3s;
+    }
+
+    .ticket-ball.live-matched {
+      background: linear-gradient(145deg, #34d399, var(--neon-green));
+      box-shadow: 0 0 16px var(--neon-green-glow), 0 0 32px var(--neon-green-glow);
+      animation: ticketBallGlow 0.5s ease-out, ticketBallPulse 1.5s ease-in-out infinite;
+      transform: scale(1.1);
+    }
+
+    @keyframes ticketBallGlow {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.25); }
+      100% { transform: scale(1.1); }
+    }
+
+    @keyframes ticketBallPulse {
+      0%, 100% { box-shadow: 0 0 16px var(--neon-green-glow), 0 0 32px var(--neon-green-glow); }
+      50% { box-shadow: 0 0 24px var(--neon-green-glow), 0 0 48px var(--neon-green-glow); }
+    }
+
+    .ticket-ball.matched {
+      background: linear-gradient(145deg, #34d399, var(--neon-green));
+      box-shadow: 0 0 12px var(--neon-green-glow);
+    }
+
+    /* ========== DRAW HISTORY ========== */
+    .draw-history-item {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border-default);
+    }
+
+    .draw-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .draw-id {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.8rem;
+      color: var(--gold-500);
+    }
+
+    .draw-time {
+      font-size: 0.7rem;
+      color: var(--text-hint);
+    }
+
+    .draw-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .draw-num {
+      width: 26px;
+      height: 26px;
+      background: linear-gradient(145deg, #fff, var(--gold-500));
+      color: #0f172a;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 800;
+    }
+
+    .draw-stats {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    /* ========== BET HISTORY ========== */
+    .bet-history-item {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border-default);
+    }
+
+    .bet-history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .bet-game-id {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.75rem;
+      color: var(--gold-500);
+    }
+
+    .bet-result-tag {
+      font-weight: 800;
+      text-transform: uppercase;
+      font-size: 0.65rem;
+      padding: 5px 12px;
+      border-radius: var(--radius-full);
+    }
+
+    .bet-result-tag.win {
+      color: var(--neon-green);
+      background: rgba(16, 185, 129, 0.15);
+    }
+
+    .bet-result-tag.lose {
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .bet-balls-section { margin-bottom: 12px; }
+
+    .bet-balls-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .bet-balls-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .bet-ball {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 800;
+      color: var(--text-secondary);
+    }
+
+    .bet-ball.matched {
+      background: linear-gradient(145deg, #34d399, var(--neon-green));
+      color: white;
+    }
+
+    .bet-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      padding: 4px 0;
+    }
+
+    .bet-info-row .label { color: var(--text-muted); }
+    .bet-info-row .value { font-weight: 700; }
+    .bet-info-row .value.win { color: var(--neon-green); }
+
+    /* ========== LOAD MORE BUTTON ========== */
+    .load-more-btn {
+      width: 100%;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05));
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: var(--radius-md);
+      color: var(--neon-purple);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 10px;
+    }
+
+    .load-more-btn:hover {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(139, 92, 246, 0.1));
+    }
+
+    .load-more-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* ========== FREQUENCY ========== */
+    .freq-container {
+      background: var(--bg-card);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      border: 1px solid var(--border-default);
+    }
+
+    .freq-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .freq-legend {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 14px;
+      font-size: 0.7rem;
+    }
+
+    .freq-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .freq-legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .freq-legend-dot.hot { background: linear-gradient(135deg, #f87171, var(--neon-red)); }
+    .freq-legend-dot.cold { background: linear-gradient(135deg, #22d3ee, var(--neon-cyan)); }
+
+    .freq-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 6px 4px;
+    }
+
+    .freq-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 4px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .freq-cell.hot {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .freq-cell.cold {
+      background: rgba(6, 182, 212, 0.1);
+      border-color: rgba(6, 182, 212, 0.2);
+    }
+
+    .freq-num {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 0.7rem;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .freq-bar-container {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 3px;
+    }
+
+    .freq-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--neon-purple), var(--neon-purple-dim));
+      border-radius: 2px;
+      transition: width 0.4s;
+    }
+
+    .freq-cell.hot .freq-bar-fill { background: linear-gradient(90deg, #f87171, var(--neon-red)); }
+    .freq-cell.cold .freq-bar-fill { background: linear-gradient(90deg, #22d3ee, var(--neon-cyan)); }
+
+    .freq-count {
+      font-size: 0.6rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    /* ========== BOTTOM NAV (FIXED) ========== */
+    .nav {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: calc(var(--nav-height) + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding-left: 8px;
+      padding-right: 8px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-gold);
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 8px 14px;
+      min-width: 65px;
+    }
+
+    .nav-item__icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-item__icon svg {
+      width: 22px;
+      height: 22px;
+      stroke: var(--text-muted);
+      fill: none;
+      stroke-width: 1.75;
+      transition: all 0.2s;
+    }
+
+    .nav-item__label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .nav-item.is-active .nav-item__icon {
+      background: rgba(251, 191, 36, 0.15);
+      border-color: var(--border-gold);
+    }
+
+    .nav-item.is-active .nav-item__icon svg {
+      stroke: var(--gold-500);
+      stroke-width: 2;
+    }
+
+    .nav-item.is-active .nav-item__label {
+      color: var(--gold-500);
+      font-weight: 700;
+    }
+
+    .nav-item:active .nav-item__icon { transform: scale(0.92); }
+
+    /* ========== MODAL ========== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      padding: 20px;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal-content {
+      background: var(--bg-card);
+      border-radius: var(--radius-xl);
+      padding: 32px 28px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+      border: 1px solid var(--border-bright);
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+      animation: modalIn 0.3s ease;
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-icon {
+      width: 70px;
+      height: 70px;
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 18px;
+      font-size: 32px;
+    }
+
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+
+    .modal-message {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .modal-btn {
+      padding: 14px 32px;
+      background: linear-gradient(135deg, var(--neon-purple), var(--neon-purple-dim));
+      border: none;
+      border-radius: var(--radius-full);
+      color: white;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 18px var(--neon-purple-glow);
+    }
+
+    .modal-btn:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Error Modal -->
+    <div class="modal-overlay" id="errorModal">
+      <div class="modal-content">
+        <div class="modal-icon">⚠️</div>
+        <h2 class="modal-title" id="errorModalTitle">Something went wrong</h2>
+        <p class="modal-message" id="errorModalMessage">Please try again.</p>
+        <button class="modal-btn" id="errorModalRetry">Try Again</button>
+      </div>
+    </div>
+
+    <!-- Top Bar (Fixed) -->
+    <div class="top-bar">
+      <div class="top-bar-item">
+        <span class="top-bar-label">BAL</span>
+        <span class="top-bar-value" id="balance">0</span>
+        <span class="top-bar-unit">Birr</span>
+      </div>
+      <div class="top-bar-item timer-item" id="timerSection">
+        <span class="top-bar-label">DRAW</span>
+        <span class="top-bar-value timer" id="timer">--</span>
+        <span class="top-bar-unit">s</span>
+      </div>
+      <div class="top-bar-item gold-item">
+        <span class="top-bar-label">MAX</span>
+        <span class="top-bar-value gold" id="maxPayout">0</span>
+        <span class="top-bar-unit">Birr</span>
+      </div>
+    </div>
+
+    <!-- Main Scrollable Content -->
+    <div class="main-scroll" id="mainScroll">
+      <div class="main-content">
+        <!-- Game Status -->
+        <div class="game-status hidden" id="gameStatus">Ready to play!</div>
+
+        <!-- Waiting Message -->
+        <div class="waiting-message" id="waitingMessage">
+          <h2>🎰 Draw In Progress</h2>
+          <p>Next round starts soon...</p>
+        </div>
+
+        <!-- Betting Section -->
+        <div class="betting-section" id="bettingSection">
+          <!-- Odds Section -->
+          <div class="odds-section">
+            <div class="odds-row" id="oddsRow"></div>
+          </div>
+
+          <!-- Numbers Grid (THE HEART) -->
+          <div class="numbers-section">
+            <div class="numbers-grid" id="numbersGrid"></div>
+          </div>
+
+          <!-- Bet Controls -->
+          <div class="bet-controls" id="betControls">
+            <div class="bet-field">
+              <button class="step-btn minus" id="minusBtn" type="button">−</button>
+              <input type="number" class="bet-input" id="betInput" min="5" max="10000" placeholder="5" value="5" />
+              <button class="step-btn plus" id="plusBtn" type="button">+</button>
+            </div>
+            <button class="submit-btn" id="submitBtn" disabled>BET</button>
+          </div>
+        </div>
+
+        <!-- Draw Stage -->
+        <div class="draw-stage" id="drawStage">
+          <div class="anim-container" id="animContainer">
+            <div class="big-ball" id="bigBall"></div>
+            <div class="ball-label" id="ballLabel">Drawing...</div>
+            <div class="result-container" id="resultContainer">
+              <div class="result-text" id="resultText"></div>
+              <div class="result-amount" id="resultAmount"></div>
+            </div>
+          </div>
+          <div class="drawn-balls-grid" id="drawnBallsGrid"></div>
+        </div>
+
+        <!-- Section Divider -->
+        <div class="section-divider">
+          <div class="section-divider__line"></div>
+          <span class="section-divider__text" id="tabTitle">Live Tickets</span>
+          <div class="section-divider__line"></div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-panel active" id="panelLive">
+          <div class="empty-state">No tickets yet</div>
+        </div>
+        <div class="tab-panel" id="panelDraws">
+          <div class="empty-state">Loading...</div>
+        </div>
+        <div class="tab-panel" id="panelHistory">
+          <div class="empty-state">Loading...</div>
+        </div>
+        <div class="tab-panel" id="panelStats">
+          <div class="empty-state">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Nav (Fixed) -->
+    <nav class="nav">
+      <button class="nav-item is-active" data-tab="live" type="button">
+        <div class="nav-item__icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </div>
+        <span class="nav-item__label">Live</span>
+      </button>
+      <button class="nav-item" data-tab="draws" type="button">
+        <div class="nav-item__icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <span class="nav-item__label">Draws</span>
+      </button>
+      <button class="nav-item" data-tab="history" type="button">
+        <div class="nav-item__icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </div>
+        <span class="nav-item__label">History</span>
+      </button>
+      <button class="nav-item" data-tab="stats" type="button">
+        <div class="nav-item__icon">
+          <svg viewBox="0 0 24 24">
+            <line x1="18" y1="20" x2="18" y2="10"/>
+            <line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+        </div>
+        <span class="nav-item__label">Stats</span>
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    /* ======================================== CONSTANTS ======================================== */
+    const PAYOUT_TABLE = {
+      "1": { "1": 3 },
+      "2": { "1": 1, "2": 10 },
+      "3": { "1": 0, "2": 2, "3": 50 },
+      "4": { "1": 0, "2": 1, "3": 10, "4": 80 },
+      "5": { "1": 0, "2": 1, "3": 3, "4": 30, "5": 150 },
+      "6": { "1": 0, "2": 0, "3": 2, "4": 15, "5": 60, "6": 500 },
+      "7": { "1": 0, "2": 0, "3": 2, "4": 4, "5": 20, "6": 80, "7": 1000 },
+      "8": { "1": 0, "2": 0, "3": 0, "4": 5, "5": 15, "6": 50, "7": 200, "8": 2000 },
+      "9": { "1": 0, "2": 0, "3": 0, "4": 2, "5": 10, "6": 25, "7": 125, "8": 1000, "9": 5000 },
+      "10": { "1": 0, "2": 0, "3": 0, "4": 0, "5": 5, "6": 30, "7": 100, "8": 300, "9": 2000, "10": 10000 }
+    };
+
+    const CONFIG = {
+      MIN_BET: 5,
+      MAX_BET: 10000,
+      MAX_NUMBERS: 10,
+      MIN_NUMBERS: 1,
+      MAX_TICKETS: 20,
+      BET_STEP: 5,
+      DRAW_SIZE: 20,
+      MAX_RECONNECT: 5
+    };
+
+    const TAB_TITLES = {
+      live: "Live Tickets",
+      draws: "Draw History",
+      history: "Bet History",
+      stats: "Number Stats"
+    };
+
+    /* ======================================== STATE ======================================== */
+    const state = {
+      balance: 0,
+      selectedNumbers: [],
+      liveTickets: [],
+      drawHistoryDb: [],
+      ticketHistoryDb: [],
+      frequencyDb: [],
+      totalRoundsPlayed: 0,
+      currentPhase: "waiting",
+      myPickedSetCache: new Set(),
+      currentGameId: null,
+      currentDrawIndex: null,
+      revealedCount: 0,
+      drawnNumbersSet: new Set(),
+      drawBatchNumbers: [],
+      drawBatchStartAt: 0,
+      drawBatchIntervalMs: 1500,
+      drawRevealTimeout: null,
+      pendingDrawFinished: null,
+      pendingMyRoundResult: null,
+      isConnected: false,
+      isReady: false,
+      activeTab: "live",
+      ticketHistoryDisplayCount: 10
+    };
+
+    /* ======================================== DOM ELEMENTS ======================================== */
+    const $ = (id) => document.getElementById(id);
+    const elements = {
+      mainScroll: $("mainScroll"),
+      balance: $("balance"),
+      maxPayout: $("maxPayout"),
+      timerSection: $("timerSection"),
+      timer: $("timer"),
+      gameStatus: $("gameStatus"),
+      waitingMessage: $("waitingMessage"),
+      bettingSection: $("bettingSection"),
+      drawStage: $("drawStage"),
+      oddsRow: $("oddsRow"),
+      numbersGrid: $("numbersGrid"),
+      betInput: $("betInput"),
+      minusBtn: $("minusBtn"),
+      plusBtn: $("plusBtn"),
+      submitBtn: $("submitBtn"),
+      ballLabel: $("ballLabel"),
+      bigBall: $("bigBall"),
+      drawnBallsGrid: $("drawnBallsGrid"),
+      resultContainer: $("resultContainer"),
+      resultText: $("resultText"),
+      resultAmount: $("resultAmount"),
+      tabTitle: $("tabTitle"),
+      panelLive: $("panelLive"),
+      panelDraws: $("panelDraws"),
+      panelHistory: $("panelHistory"),
+      panelStats: $("panelStats"),
+      errorModal: $("errorModal"),
+      errorModalTitle: $("errorModalTitle"),
+      errorModalMessage: $("errorModalMessage"),
+      errorModalRetry: $("errorModalRetry")
+    };
+
+    /* ======================================== TAB NAVIGATION ======================================== */
+    document.querySelectorAll(".nav-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tabId = btn.dataset.tab;
+        if (state.activeTab === tabId) return;
+
+        state.activeTab = tabId;
+
+        document.querySelectorAll(".nav-item").forEach((b) => b.classList.remove("is-active"));
+        btn.classList.add("is-active");
+
+        elements.tabTitle.textContent = TAB_TITLES[tabId] || "Content";
+
+        document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+        const panelMap = {
+          live: elements.panelLive,
+          draws: elements.panelDraws,
+          history: elements.panelHistory,
+          stats: elements.panelStats
+        };
+        if (panelMap[tabId]) panelMap[tabId].classList.add("active");
+      });
+    });
+
+    /* ======================================== MODAL ======================================== */
+    function showModal(title, message) {
+      elements.errorModalTitle.textContent = title;
+      elements.errorModalMessage.textContent = message;
+      elements.errorModal.classList.add("active");
+    }
+
+    function hideModal() {
+      elements.errorModal.classList.remove("active");
+    }
+
+    elements.errorModalRetry.addEventListener("click", () => {
+      hideModal();
+      window.location.reload();
+    });
+
+    /* ======================================== TELEGRAM ======================================== */
+    try {
+      if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.expand();
+        window.Telegram.WebApp.ready();
+      }
+    } catch (_) {}
+
+    /* ======================================== SOCKET ======================================== */
+    const socket = io({
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: CONFIG.MAX_RECONNECT,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000
+    });
+
+    /* ======================================== UTILITIES ======================================== */
+    function formatNumber(num) {
+      return Number(num || 0).toFixed(0);
+    }
+
+    async function safeJson(res) {
+      try {
+        return await res.json();
+      } catch {
+        return null;
+      }
+    }
+
+    async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        return res;
+      } finally {
+        clearTimeout(id);
+      }
+    }
+
+    /* ======================================== INITIALIZATION ======================================== */
+    function initNumberGrid() {
+      elements.numbersGrid.innerHTML = "";
+      for (let i = 1; i <= 80; i++) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "num-btn";
+        btn.textContent = i;
+        btn.dataset.num = i;
+        btn.addEventListener("click", () => toggleNumber(i, btn));
+        elements.numbersGrid.appendChild(btn);
+      }
+    }
+
+    function initOddsSection() {
+      elements.oddsRow.innerHTML = "";
+      for (let i = 1; i <= 10; i++) {
+        const cell = document.createElement("div");
+        cell.className = "odds-cell";
+        cell.innerHTML = `
+          <div class="odds-mult" id="mult-${i}">-</div>
+          <div class="odds-slot" id="slot-${i}"></div>
+          <div class="odds-match" id="match-${i}">${i}</div>
+        `;
+        elements.oddsRow.appendChild(cell);
+      }
+    }
+
+    function initDrawnBallsGrid() {
+      elements.drawnBallsGrid.innerHTML = "";
+      for (let i = 0; i < CONFIG.DRAW_SIZE; i++) {
+        const div = document.createElement("div");
+        div.className = "drawn-ball";
+        elements.drawnBallsGrid.appendChild(div);
+      }
+    }
+
+    /* ======================================== API ======================================== */
+    async function fetchGameData() {
+      try {
+        const res = await fetchWithTimeout("./kano/game/data", { credentials: "include" }, 12000);
+        const data = await safeJson(res);
+
+        if (!res.ok || !data?.success) {
+          const msg = data?.message || data?.error || "Failed to load";
+          if (res.status === 503) {
+            showModal("Server Busy", msg || "Server is at maximum capacity. Please try again later.");
+          }
+          throw new Error(msg);
+        }
+
+        if (data.user) updateBalance(data.user.balance ?? 0);
+        state.drawHistoryDb = data.drawHistory || [];
+        state.ticketHistoryDb = data.userTicketHistory || [];
+        state.frequencyDb = data.kano?.frequency || [];
+        state.totalRoundsPlayed = data.kano?.totalRoundsPlayed || 0;
+        state.ticketHistoryDisplayCount = 10;
+
+        renderDrawHistory();
+        renderBetHistory();
+        renderFrequency();
+        state.isReady = true;
+      } catch (e) {
+        console.error("[API Error]", e);
+        elements.panelDraws.innerHTML = '<div class="empty-state">Unable to load</div>';
+        elements.panelHistory.innerHTML = '<div class="empty-state">Unable to load</div>';
+        elements.panelStats.innerHTML = '<div class="empty-state">Unable to load</div>';
+      }
+    }
+
+    /* ======================================== NUMBER SELECTION ======================================== */
+    function toggleNumber(num, btn) {
+      if (state.currentPhase !== "betting") return;
+      if (btn.classList.contains("disabled")) return;
+
+      const idx = state.selectedNumbers.indexOf(num);
+      if (idx > -1) {
+        state.selectedNumbers.splice(idx, 1);
+        btn.classList.remove("selected");
+      } else if (state.selectedNumbers.length < CONFIG.MAX_NUMBERS) {
+        state.selectedNumbers.push(num);
+        btn.classList.add("selected");
+      }
+      updateSubmitButton();
+      renderOddsSection();
+    }
+
+    function clearSelection() {
+      state.selectedNumbers = [];
+      document.querySelectorAll(".num-btn.selected").forEach((btn) => btn.classList.remove("selected"));
+      updateSubmitButton();
+      renderOddsSection();
+    }
+
+    function clamp(n, min, max) {
+      return Math.max(min, Math.min(max, n));
+    }
+
+    function updateSubmitButton() {
+      const betAmount = parseInt(elements.betInput.value) || 0;
+      const hasNumbers = state.selectedNumbers.length >= CONFIG.MIN_NUMBERS;
+      const validBet = betAmount >= CONFIG.MIN_BET && betAmount <= CONFIG.MAX_BET && betAmount <= state.balance;
+      const canBet = state.liveTickets.length < CONFIG.MAX_TICKETS;
+      const isBetting = state.currentPhase === "betting";
+      elements.submitBtn.disabled = !(hasNumbers && validBet && canBet && isBetting && state.isConnected);
+    }
+
+    /* ======================================== ODDS & PAYOUT ======================================== */
+    function renderOddsSection() {
+      const picked = state.selectedNumbers.length;
+      const betAmount = parseInt(elements.betInput.value) || 0;
+      const sortedNumbers = [...state.selectedNumbers].sort((a, b) => a - b);
+      const payoutRow = PAYOUT_TABLE[String(picked)] || {};
+
+      for (let i = 1; i <= 10; i++) {
+        const mult = $(`mult-${i}`);
+        const slot = $(`slot-${i}`);
+        const match = $(`match-${i}`);
+        const multiplier = payoutRow[String(i)];
+
+        mult.classList.toggle("active", multiplier != null && picked > 0);
+        mult.textContent = multiplier != null && picked > 0 ? `${multiplier}x` : "-";
+
+        slot.classList.toggle("filled", i <= sortedNumbers.length);
+        slot.textContent = i <= sortedNumbers.length ? sortedNumbers[i - 1] : "";
+
+        match.classList.toggle("active", i <= picked);
+      }
+
+      if (picked < 1 || !betAmount) {
+        elements.maxPayout.textContent = "0";
+        return;
+      }
+
+      const multipliers = Object.values(payoutRow);
+      const maxMult = multipliers.length ? Math.max(...multipliers) : 0;
+      elements.maxPayout.textContent = (betAmount * maxMult).toFixed(0);
+    }
+
+    /* ======================================== BET INPUT ======================================== */
+    function setBetAmount(val) {
+      const raw = Math.floor(Number(val) || 0);
+      const n = clamp(raw, CONFIG.MIN_BET, CONFIG.MAX_BET);
+      elements.betInput.value = n;
+      updateSubmitButton();
+      renderOddsSection();
+    }
+
+    elements.minusBtn.addEventListener("click", () => {
+      setBetAmount((parseInt(elements.betInput.value) || CONFIG.MIN_BET) - CONFIG.BET_STEP);
+    });
+
+    elements.plusBtn.addEventListener("click", () => {
+      setBetAmount((parseInt(elements.betInput.value) || CONFIG.MIN_BET) + CONFIG.BET_STEP);
+    });
+
+    elements.betInput.addEventListener("input", () => {
+      const v = elements.betInput.value;
+      if (v === "") return updateSubmitButton();
+      setBetAmount(v);
+    });
+
+    elements.submitBtn.addEventListener("click", () => {
+      const betAmount = parseInt(elements.betInput.value) || 0;
+      if (state.selectedNumbers.length < CONFIG.MIN_NUMBERS) return;
+      if (betAmount < CONFIG.MIN_BET || betAmount > CONFIG.MAX_BET) return;
+      if (betAmount > state.balance) return;
+      if (state.liveTickets.length >= CONFIG.MAX_TICKETS) return;
+
+      socket.emit("pickTicket", {
+        numbers: [...state.selectedNumbers].sort((a, b) => a - b),
+        betAmount
+      });
+      clearSelection();
+    });
+
+    /* ======================================== TIMER & STATUS ======================================== */
+    function updateTimer(seconds) {
+      elements.timer.textContent = seconds;
+      elements.timer.classList.remove("warning", "danger");
+      if (seconds <= 10) elements.timer.classList.add("danger");
+      else if (seconds <= 20) elements.timer.classList.add("warning");
+    }
+
+    function hideStatus() {
+      elements.gameStatus.classList.add("hidden");
+    }
+
+    function showStatus(text, type = "") {
+      elements.gameStatus.textContent = text;
+      elements.gameStatus.classList.remove("hidden", "drawing");
+      if (type === "drawing") elements.gameStatus.classList.add("drawing");
+    }
+
+    /* ======================================== PHASE MANAGEMENT ======================================== */
+    function cancelDrawReveal() {
+      if (state.drawRevealTimeout) {
+        clearTimeout(state.drawRevealTimeout);
+        state.drawRevealTimeout = null;
+      }
+    }
+
+    function setPhase(phase) {
+      state.currentPhase = phase;
+
+      elements.waitingMessage.classList.remove("active");
+      elements.bettingSection.classList.remove("active");
+      elements.drawStage.classList.remove("active");
+      elements.resultContainer.classList.remove("active");
+      elements.resultAmount.classList.remove("active");
+      elements.ballLabel.style.display = "block";
+
+      if (phase !== "betting") elements.maxPayout.textContent = "0";
+
+      switch (phase) {
+        case "waiting":
+          elements.waitingMessage.classList.add("active");
+          hideStatus();
+          break;
+
+        case "betting":
+          elements.bettingSection.classList.add("active");
+          showStatus("Place your bets!", "");
+          updateSubmitButton();
+          renderOddsSection();
+          break;
+
+        case "drawing":
+          elements.drawStage.classList.add("active");
+          showStatus(state.currentGameId ? `Drawing... ${state.currentGameId}` : "Drawing...", "drawing");
+          initDrawnBallsGrid();
+          state.drawnNumbersSet = new Set();
+          gsap.set(elements.bigBall, { scale: 0.9, opacity: 0 });
+          elements.ballLabel.textContent = "Drawing...";
+          break;
+      }
+
+      elements.mainScroll.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ======================================== BALANCE ======================================== */
+    function updateBalance(newBalance) {
+      state.balance = Number(newBalance) || 0;
+      elements.balance.textContent = state.balance.toFixed(0);
+      updateSubmitButton();
+    }
+
+    /* ======================================== LIVE TICKETS RENDER ======================================== */
+    function renderLiveTickets() {
+      if (state.liveTickets.length === 0) {
+        elements.panelLive.innerHTML = '<div class="empty-state">No tickets yet. Pick numbers and place your bet!</div>';
+        return;
+      }
+
+      elements.panelLive.innerHTML = state.liveTickets.map((ticket, idx) => {
+        return `
+          <div class="ticket-item" data-ticket-id="${ticket.id}">
+            <div class="ticket-header">
+              <span class="ticket-id">Ticket #${idx + 1}</span>
+              <span class="ticket-bet">${ticket.betAmount} Birr</span>
+            </div>
+            <div class="ticket-balls-grid">
+              ${ticket.numbers.map((n) => `
+                <span class="ticket-ball" data-num="${n}">${n}</span>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      if (state.currentPhase === "drawing" && state.drawnNumbersSet.size > 0) {
+        updateLiveTicketsGlow();
+      }
+    }
+
+    function updateLiveTicketsGlow() {
+      const ticketBalls = elements.panelLive.querySelectorAll(".ticket-ball");
+      ticketBalls.forEach((ball) => {
+        const num = parseInt(ball.dataset.num);
+        if (state.drawnNumbersSet.has(num)) {
+          if (!ball.classList.contains("live-matched")) {
+            ball.classList.add("live-matched");
+          }
+        }
+      });
+    }
+
+    function highlightNewMatch(number) {
+      const ticketBalls = elements.panelLive.querySelectorAll(`.ticket-ball[data-num="${number}"]`);
+      ticketBalls.forEach((ball) => {
+        ball.classList.add("live-matched");
+      });
+    }
+
+    function finalizeTicketMatches() {
+      const allLiveMatched = elements.panelLive.querySelectorAll(".ticket-ball.live-matched");
+      allLiveMatched.forEach((ball) => {
+        ball.classList.remove("live-matched");
+        ball.classList.add("matched");
+      });
+    }
+
+    /* ======================================== DRAW HISTORY RENDER (FIXED) ======================================== */
+    function renderDrawHistory() {
+      if (!state.drawHistoryDb.length) {
+        elements.panelDraws.innerHTML = '<div class="empty-state">No draws yet</div>';
+        return;
+      }
+
+      // Sort by drawIndex descending (most recent first) and take only closest 20
+      const sorted = state.drawHistoryDb.slice().sort((a, b) => (b.drawIndex || 0) - (a.drawIndex || 0));
+      const displayDraws = sorted.slice(0, 20);
+
+      elements.panelDraws.innerHTML = displayDraws.map((draw) => {
+        const nums = draw.drawnNumbers || [];
+        const timestamp = draw.timestamp ? new Date(draw.timestamp).toLocaleString() : "";
+        const gameId = draw.gameId || `#${draw.drawIndex}`;
+
+        return `
+          <div class="draw-history-item">
+            <div class="draw-header">
+              <span class="draw-id">${gameId}</span>
+              <span class="draw-time">${timestamp}</span>
+            </div>
+            <div class="draw-grid">
+              ${nums.map((n) => `<div class="draw-num">${n}</div>`).join("")}
+            </div>
+            <div class="draw-stats">
+              <span>🎫 ${draw.totalTickets || 0}</span>
+              <span>👥 ${draw.totalPlayers || 0}</span>
+              <span>💰 ${formatNumber(draw.totalBets)}</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    /* ======================================== BET HISTORY RENDER (FIXED) ======================================== */
+    function renderBetHistory() {
+      if (!state.ticketHistoryDb.length) {
+        elements.panelHistory.innerHTML = '<div class="empty-state">No bets yet. Start playing to see your history!</div>';
+        return;
+      }
+
+      const maxDisplay = 50;
+      const displayCount = Math.min(state.ticketHistoryDisplayCount, state.ticketHistoryDb.length, maxDisplay);
+      const canShowMore = displayCount < state.ticketHistoryDb.length && displayCount < maxDisplay;
+
+      elements.panelHistory.innerHTML = `
+        ${state.ticketHistoryDb.slice(0, displayCount).map((t) => {
+          const isWin = t.result === "win";
+          const bet = Number(t.betAmount ?? 0);
+          const win = Number(t.winAmount ?? 0);
+          const mult = Number(t.multiplier ?? 0);
+          const gameId = t.gameId || `#${t.index}`;
+          const pickedNumbers = t.pickedNumbers || [];
+          const matchedNumbers = new Set(t.matchedNumbers || []);
+          const matchedCount = t.matchedNo ?? 0;
+
+          return `
+            <div class="bet-history-item">
+              <div class="bet-history-header">
+                <span class="bet-game-id">${gameId}</span>
+                <span class="bet-result-tag ${isWin ? 'win' : 'lose'}">
+                  ${isWin ? `WIN ${mult}x` : 'LOSE'}
+                </span>
+              </div>
+              <div class="bet-balls-section">
+                <div class="bet-balls-label">${matchedCount}/${pickedNumbers.length} matched</div>
+                <div class="bet-balls-grid">
+                  ${pickedNumbers.map((n) => `
+                    <span class="bet-ball ${matchedNumbers.has(n) ? 'matched' : ''}">${n}</span>
+                  `).join("")}
+                </div>
+              </div>
+              <div class="bet-info-row">
+                <span class="label">Bet</span>
+                <span class="value">${formatNumber(bet)} Birr</span>
+              </div>
+              ${isWin ? `
+              <div class="bet-info-row">
+                <span class="label">Win</span>
+                <span class="value win">${formatNumber(win)} Birr</span>
+              </div>
+              ` : ''}
+            </div>
+          `;
+        }).join("")}
+        ${canShowMore ? `
+          <button class="load-more-btn" id="loadMoreHistory">Get More History</button>
+        ` : ''}
+      `;
+
+      const loadMoreBtn = document.getElementById("loadMoreHistory");
+      if (loadMoreBtn) {
+        loadMoreBtn.addEventListener("click", () => {
+          state.ticketHistoryDisplayCount = Math.min(state.ticketHistoryDisplayCount + 10, maxDisplay);
+          renderBetHistory();
+        });
+      }
+    }
+
+    /* ======================================== FREQUENCY RENDER ======================================== */
+    function renderFrequency() {
+      if (!state.frequencyDb.length) {
+        state.frequencyDb = Array.from({ length: 80 }, (_, i) => ({ number: i + 1, count: 0 }));
+      }
+
+      const freqMap = new Map(state.frequencyDb.map(f => [f.number, f.count || 0]));
+      const fullFreq = Array.from({ length: 80 }, (_, i) => ({
+        number: i + 1,
+        count: freqMap.get(i + 1) || 0
+      }));
+
+      const sorted = [...fullFreq].sort((a, b) => b.count - a.count);
+      const hotSet = new Set(sorted.slice(0, 8).map(f => f.number));
+      const coldSet = new Set(sorted.slice(-8).map(f => f.number));
+      const maxCount = Math.max(...fullFreq.map(f => f.count), 1);
+
+      elements.panelStats.innerHTML = `
+        <div class="freq-container">
+          <div class="freq-meta">Based on last ${Math.min(state.totalRoundsPlayed, 100)} draws</div>
+          <div class="freq-legend">
+            <div class="freq-legend-item">
+              <span class="freq-legend-dot hot"></span>Hot (Top 8)
+            </div>
+            <div class="freq-legend-item">
+              <span class="freq-legend-dot cold"></span>Cold (Bottom 8)
+            </div>
+          </div>
+          <div class="freq-grid">
+            ${fullFreq.map((f) => {
+              const barWidth = (f.count / maxCount) * 100;
+              const isHot = hotSet.has(f.number);
+              const isCold = coldSet.has(f.number);
+
+              return `
+                <div class="freq-cell ${isHot ? 'hot' : ''} ${isCold ? 'cold' : ''}">
+                  <div class="freq-num">${f.number}</div>
+                  <div class="freq-bar-container">
+                    <div class="freq-bar-fill" style="width: ${barWidth}%"></div>
+                  </div>
+                  <div class="freq-count">${f.count}</div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    /* ======================================== DRAW ANIMATION ======================================== */
+    function getMyPickedSet() {
+      return new Set(state.liveTickets.flatMap((t) => t.numbers));
+    }
+
+    function calcRevealedCount(startAt, intervalMs) {
+      const elapsed = Date.now() - Number(startAt || 0);
+      if (elapsed < 0) return 0;
+      return Math.min(CONFIG.DRAW_SIZE, Math.floor(elapsed / intervalMs) + 1);
+    }
+
+    function showDrawNumber(payload, animate = true) {
+      const { index, number } = payload;
+      if (state.currentPhase !== "drawing") setPhase("drawing");
+
+      state.drawnNumbersSet.add(number);
+      const isMatch = state.myPickedSetCache.has(number);
+
+      elements.bigBall.textContent = number;
+      elements.bigBall.classList.toggle("matched", isMatch);
+      elements.ballLabel.textContent = `Ball ${index}/${CONFIG.DRAW_SIZE}`;
+
+      if (animate) {
+        gsap.fromTo(elements.bigBall, { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: "back.out(1.7)" });
+      } else {
+        elements.bigBall.style.opacity = "1";
+        elements.bigBall.style.transform = "scale(1)";
+      }
+
+      const slot = elements.drawnBallsGrid.children[index - 1];
+      if (slot) {
+        slot.textContent = number;
+        slot.classList.toggle("matched", isMatch);
+        if (animate) {
+          gsap.to(slot, { scale: 1, opacity: 1, duration: 0.2, ease: "back.out(1.7)" });
+        } else {
+          slot.style.opacity = "1";
+          slot.style.transform = "scale(1)";
+        }
+      }
+
+      if (isMatch) highlightNewMatch(number);
+
+      state.revealedCount = index;
+      if (state.revealedCount >= CONFIG.DRAW_SIZE) showRoundResult();
+    }
+
+    function syncAndStartReveal(batch) {
+      if (!batch?.numbers) return;
+      cancelDrawReveal();
+
+      state.drawBatchNumbers = batch.numbers;
+      state.drawBatchStartAt = Number(batch.startAt || Date.now());
+      state.drawBatchIntervalMs = Number(batch.intervalMs || 1500);
+      state.currentDrawIndex = batch.drawIndex ?? null;
+      state.currentGameId = batch.gameId || null;
+
+      setPhase("drawing");
+      initDrawnBallsGrid();
+      state.drawnNumbersSet = new Set();
+      renderLiveTickets();
+
+      const already = calcRevealedCount(state.drawBatchStartAt, state.drawBatchIntervalMs);
+      for (let i = 1; i <= already; i++) {
+        showDrawNumber({ index: i, number: state.drawBatchNumbers[i - 1] }, false);
+      }
+
+      function scheduleNext(nextIndex) {
+        if (nextIndex > CONFIG.DRAW_SIZE) {
+          elements.ballLabel.textContent = "Complete";
+          showRoundResult();
+          return;
+        }
+        const targetTime = state.drawBatchStartAt + (nextIndex - 1) * state.drawBatchIntervalMs;
+        const delay = Math.max(0, targetTime - Date.now());
+        state.drawRevealTimeout = setTimeout(() => {
+          showDrawNumber({ index: nextIndex, number: state.drawBatchNumbers[nextIndex - 1] }, true);
+          scheduleNext(nextIndex + 1);
+        }, delay);
+      }
+
+      scheduleNext(already + 1);
+    }
+
+    function computeTotalWin(payload) {
+      if (!payload) return 0;
+      const direct = Number(payload.totalWin);
+      if (Number.isFinite(direct)) return Math.max(0, direct);
+
+      if (Array.isArray(payload.tickets)) {
+        return payload.tickets.reduce((sum, t) => sum + Math.max(0, Number(t?.winAmount || 0)), 0);
+      }
+      return 0;
+    }
+
+    function canShowRoundResultNow() {
+      if (!state.pendingDrawFinished) return false;
+      if (state.revealedCount < CONFIG.DRAW_SIZE) return false;
+
+      const hasTickets = state.liveTickets.length > 0;
+      if (hasTickets && !state.pendingMyRoundResult) return false;
+
+      return true;
+    }
+
+    function showRoundResult() {
+      if (!canShowRoundResultNow()) {
+        if (state.pendingDrawFinished && state.revealedCount >= CONFIG.DRAW_SIZE && state.liveTickets.length > 0 && !state.pendingMyRoundResult) {
+          elements.ballLabel.textContent = "Calculating result...";
+        }
+        return;
+      }
+
+      finalizeTicketMatches();
+
+      const hasTickets = state.liveTickets.length > 0;
+      const totalWin = hasTickets ? computeTotalWin(state.pendingMyRoundResult) : 0;
+      const anyWin = totalWin > 0;
+
+      elements.ballLabel.style.display = "none";
+      elements.resultContainer.classList.add("active");
+
+      if (hasTickets) {
+        if (anyWin) {
+          elements.resultText.textContent = "WIN";
+          elements.resultText.className = "result-text win";
+
+          elements.resultAmount.textContent = `${formatNumber(totalWin)} Birr`;
+          elements.resultAmount.classList.add("active");
+
+          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+          setTimeout(() => confetti({ particleCount: 50, spread: 100, origin: { y: 0.5 } }), 200);
+        } else {
+          elements.resultText.textContent = "LOSE";
+          elements.resultText.className = "result-text lose";
+          elements.resultAmount.classList.remove("active");
+        }
+      } else {
+        elements.resultText.textContent = "DRAW COMPLETE";
+        elements.resultText.className = "result-text";
+        elements.resultAmount.classList.remove("active");
+      }
+
+      hideStatus();
+      setTimeout(() => fetchGameData(), 800);
+
+      state.pendingDrawFinished = null;
+      state.pendingMyRoundResult = null;
+    }
+
+    /* ======================================== SOCKET EVENTS ======================================== */
+    socket.on("connect", () => {
+      state.isConnected = true;
+      hideModal();
+      hideStatus();
+      fetchGameData();
+      updateSubmitButton();
+    });
+
+    socket.on("disconnect", () => {
+      state.isConnected = false;
+      updateSubmitButton();
+    });
+
+    socket.on("connect_error", (error) => {
+      state.isConnected = false;
+      const messages = {
+        "NETWORK_LAGGING": ["Server Busy", "Please try again in a moment."],
+        "AUTH_REQUIRED": ["Open from Telegram", "Please access this game through Telegram."],
+        "USER_NOT_FOUND": ["Account Not Found", "Please register first."],
+        "USER_BLOCKED": ["Account Suspended", "Please contact support."],
+        "SERVER_SHUTDOWN": ["Server Restarting", "Please reconnect in a moment."]
+      };
+      const [title, msg] = messages[error.message] || ["Connection Issue", "Please check your connection."];
+      showModal(title, msg);
+      updateSubmitButton();
+    });
+
+    socket.on("serverShutdown", (payload) => {
+      showModal("Server Restarting", payload?.message || "Please reconnect shortly.");
+    });
+
+    socket.on("userData", (data) => {
+      updateBalance(data.balance);
+    });
+
+    socket.on("myRoundTickets", (tickets) => {
+      state.liveTickets = Array.isArray(tickets) ? tickets : [];
+      renderLiveTickets();
+      updateSubmitButton();
+    });
+
+    socket.on("gameState", (gs) => {
+      if (gs?.gameId) state.currentGameId = gs.gameId;
+
+      if (gs?.phase === "betting") {
+        setPhase("betting");
+        updateTimer(gs.countdown);
+        return;
+      }
+
+      if (gs?.phase === "drawing" || gs?.phase === "result") {
+        state.myPickedSetCache = getMyPickedSet();
+        setPhase("drawing");
+        if (gs.drawBatch) syncAndStartReveal(gs.drawBatch);
+        if (gs.drawFinished) {
+          state.pendingDrawFinished = gs.drawFinished;
+          showRoundResult();
+        }
+        return;
+      }
+
+      setPhase("waiting");
+    });
+
+    socket.on("countdown", (seconds) => {
+      updateTimer(seconds);
+      if (state.currentPhase !== "betting") setPhase("betting");
+    });
+
+    socket.on("ticketConfirmed", (data) => {
+      if (data?.ticket) {
+        const exists = state.liveTickets.some(t => String(t.id) === String(data.ticket.id) && String(t.timestamp) === String(data.ticket.timestamp));
+        if (!exists) state.liveTickets.push(data.ticket);
+        renderLiveTickets();
+      }
+      if (data?.newBalance != null) updateBalance(data.newBalance);
+    });
+
+    socket.on("ticketError", (message) => showModal("Ticket Error", String(message || "Invalid ticket")));
+
+    socket.on("newRound", (payload) => {
+      cancelDrawReveal();
+      state.pendingDrawFinished = null;
+      state.pendingMyRoundResult = null;
+      state.liveTickets = [];
+      state.myPickedSetCache = new Set();
+      state.drawnNumbersSet = new Set();
+      state.currentDrawIndex = null;
+      state.currentGameId = payload?.gameId || null;
+      state.revealedCount = 0;
+      renderLiveTickets();
+      clearSelection();
+      setPhase("betting");
+      if (payload?.countdown != null) updateTimer(payload.countdown);
+      updateSubmitButton();
+    });
+
+    socket.on("balanceUpdate", updateBalance);
+
+    socket.on("drawStarted", (payload) => {
+      cancelDrawReveal();
+      state.pendingDrawFinished = null;
+      state.pendingMyRoundResult = null;
+      if (payload?.gameId) state.currentGameId = payload.gameId;
+
+      state.myPickedSetCache = getMyPickedSet();
+      state.revealedCount = 0;
+      state.drawnNumbersSet = new Set();
+
+      setPhase("drawing");
+      initDrawnBallsGrid();
+      renderLiveTickets();
+
+      elements.ballLabel.style.display = "block";
+      elements.ballLabel.textContent = "Drawing...";
+      elements.resultContainer.classList.remove("active");
+      gsap.set(elements.bigBall, { scale: 0.9, opacity: 0 });
+    });
+
+    socket.on("drawBatch", (batch) => {
+      state.myPickedSetCache = getMyPickedSet();
+      syncAndStartReveal(batch);
+    });
+
+    socket.on("myRoundResult", (payload) => {
+      state.pendingMyRoundResult = payload;
+      showRoundResult();
+    });
+
+    socket.on("drawFinished", (data) => {
+      state.pendingDrawFinished = data;
+      showRoundResult();
+    });
+
+    /* ======================================== INIT ======================================== */
+    initNumberGrid();
+    initOddsSection();
+    initDrawnBallsGrid();
+    setPhase("waiting");
+    renderOddsSection();
+  </script>
+</body>
+</html>

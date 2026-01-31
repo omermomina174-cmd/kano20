@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="color-scheme" content="dark" />
+  <title>Admin Panel</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --bg-card: #1a1a1a;
+      --bg-hover: #252525;
+      --border: #2a2a2a;
+      --text: #ffffff;
+      --text-muted: #888888;
+      --gold: #f5a623;
+      --green: #22c55e;
+      --green-bg: rgba(34, 197, 94, 0.1);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.1);
+      --blue: #3b82f6;
+      --blue-bg: rgba(59, 130, 246, 0.1);
+      --purple: #a855f7;
+      --orange: #f97316;
+      --cyan: #06b6d4;
+      --radius: 8px;
+      --radius-sm: 6px;
+      --header-height: 120px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+      min-height: 100vh;
+      padding-top: var(--header-height);
+      padding-bottom: 20px;
+      overscroll-behavior-y: contain;
+    }
+
+    /* ═══════ HEADER ═══════ */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 0;
+    }
+
+    .header-content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 12px;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+
+    /* ═══════ TABS ═══════ */
+    .tabs {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .tab:hover {
+      background: var(--bg-hover);
+    }
+
+    .tab.active {
+      background: var(--gold);
+      color: #000;
+      border-color: var(--gold);
+    }
+
+    .tab .count {
+      display: inline-block;
+      background: rgba(0,0,0,0.2);
+      padding: 1px 6px;
+      border-radius: 99px;
+      font-size: 11px;
+      margin-left: 4px;
+    }
+
+    /* ═══════ CONTAINER ═══════ */
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 12px;
+    }
+
+    /* ═══════ SECTIONS ═══════ */
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ═══════ CARDS ═══════ */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .card-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .card-body {
+      padding: 14px;
+    }
+
+    /* ═══════ CHIP ═══════ */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .chip b {
+      color: var(--text);
+    }
+
+    .chip.balance {
+      background: var(--blue-bg);
+      border-color: rgba(59, 130, 246, 0.3);
+      color: var(--blue);
+    }
+
+    /* ═══════ TAGS ═══════ */
+    .tag {
+      display: inline-flex;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .tag.active {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .tag.blocked {
+      background: var(--red-bg);
+      color: var(--red);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .tag.sleep {
+      background: rgba(251, 191, 36, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(251, 191, 36, 0.3);
+    }
+
+    .tag.approved {
+      background: var(--green-bg);
+      color: var(--green);
+    }
+
+    .tag.rejected {
+      background: var(--red-bg);
+      color: var(--red);
+    }
+
+    .tag.deposit {
+      background: var(--blue-bg);
+      color: var(--blue);
+    }
+
+    .tag.withdraw {
+      background: rgba(249, 115, 22, 0.1);
+      color: var(--orange);
+    }
+
+    /* ═══════ BUTTONS ═══════ */
+    .btn {
+      border: none;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    .btn.primary {
+      background: var(--blue);
+      color: white;
+    }
+
+    .btn.primary:hover:not(:disabled) {
+      background: #2563eb;
+    }
+
+    .btn.secondary {
+      background: var(--bg-hover);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn.secondary:hover:not(:disabled) {
+      background: #303030;
+    }
+
+    .btn.danger {
+      background: var(--red-bg);
+      color: var(--red);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .btn.success {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .btn.small {
+      padding: 8px 12px;
+      font-size: 11px;
+    }
+
+    /* ═══════ INPUTS ═══════ */
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .row:last-child {
+      margin-bottom: 0;
+    }
+
+    .row > * {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    input, select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      outline: none;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    input::placeholder {
+      color: var(--text-muted);
+    }
+
+    input:focus, select:focus {
+      border-color: var(--blue);
+    }
+
+    select {
+      cursor: pointer;
+    }
+
+    /* ═══════ LIST ═══════ */
+    .list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .list-item:last-child {
+      border-bottom: none;
+    }
+
+    .list-item:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .list-item .left {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .list-item .title {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .list-item .meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .mono {
+      font-family: 'SF Mono', monospace;
+    }
+
+    /* ═══════ EMPTY STATE ═══════ */
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+
+    .empty-text {
+      font-size: 12px;
+    }
+
+    /* ═══════ LOADING ═══════ */
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-muted);
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 6px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ═══════ TOAST ═══════ */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 600;
+      z-index: 1000;
+      opacity: 0;
+      transition: all 0.3s ease;
+      max-width: 90%;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    .toast.success {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .toast.error {
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    /* ═══════ MODAL ═══════ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow: auto;
+    }
+
+    .modal-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      background: var(--bg-card);
+      z-index: 10;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .modal-body {
+      padding: 16px;
+    }
+
+    /* ═══════ BALANCE DISPLAY ═══════ */
+    .balance-display {
+      background: var(--blue-bg);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .balance-display .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .balance-display .value {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--blue);
+    }
+
+    .balance-display .currency {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+
+    /* ═══════ SUMMARY GRID ═══════ */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .summary-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      text-align: center;
+    }
+
+    .summary-item .num {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .summary-item .lbl {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    /* ═══════ TX LIST ═══════ */
+    .tx-list {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+
+    .tx-item {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .tx-item:last-child {
+      border-bottom: none;
+    }
+
+    .tx-item:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .tx-left {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .tx-amount {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .tx-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .tx-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    /* ═══════ DIVIDER ═══════ */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 16px 0;
+    }
+
+    /* ═══════ RESPONSIVE ═══════ */
+    @media (max-width: 600px) {
+      .header-content {
+        padding: 0 12px;
+      }
+
+      .container {
+        padding: 10px;
+      }
+
+      .list-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .list-item > .btn {
+        width: 100%;
+      }
+
+      .row > * {
+        min-width: 100%;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .balance-display .value {
+        font-size: 28px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Header (Fixed) -->
+  <header class="header">
+    <div class="header-content">
+      <div class="header-top">
+        <div>
+          <h1>⚡ Admin Panel</h1>
+          <p id="authStatus">Authenticating...</p>
+        </div>
+        <button class="btn secondary small" id="btnRefresh">🔄</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" data-tab="settings">⚙️ Settings</button>
+        <button class="tab" data-tab="subadmins">👥 SubAdmins <span class="count" id="tabSubCount">0</span></button>
+        <button class="tab" data-tab="users">👤 Users <span class="count" id="tabUserCount">0</span></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- ═══════════════════════════════════════════
+         SETTINGS SECTION
+    ═══════════════════════════════════════════ -->
+    <section class="section active" id="secSettings">
+      <!-- Active Telebirr -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📱 Active Telebirr</div>
+          <span class="chip" id="activeTbChip">Not set</span>
+        </div>
+        <div class="card-body">
+          <div class="chip" style="width:100%;">
+            Receiver: <b id="activeTelebirrDisplay">—</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- Max User Limit -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">👥 Max User Limit</div>
+          <span class="chip">Current: <b id="maxUserLimitVal">—</b></span>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <input type="number" id="maxUserLimitInput" min="1" placeholder="Enter new limit" />
+            <button class="btn primary" id="btnSetMaxUserLimit" style="flex:0 0 120px;">✓ Update</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kano RTP -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">🎮 Kano RTP</div>
+          <span class="chip">Current: <b id="kanoRtpVal">—</b>%</span>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <input type="number" id="kanoRtpInput" min="1" max="100" placeholder="1 - 100" />
+            <button class="btn primary" id="btnSetKanoRtp" style="flex:0 0 120px;">✓ Update</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Registry -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📋 SubAdmin Registry</div>
+          <span class="chip" id="registryCount">0 phones</span>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <input id="registryPhoneInput" placeholder="Phone (09… / 2519…)" />
+            <button class="btn primary" id="btnAddRegistry" style="flex:0 0 120px;">+ Add</button>
+          </div>
+        </div>
+        <div class="list" id="registryList"></div>
+      </div>
+
+      <!-- Telebirr Accounts -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">💳 Telebirr Accounts</div>
+          <span class="chip" id="telebirrCount">0 accounts</span>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <input id="tbPhoneInput" placeholder="Phone (09… / 2519…)" />
+          </div>
+          <div class="row">
+            <input id="tbFirstInput" placeholder="First name" />
+            <input id="tbFatherInput" placeholder="Father name" />
+          </div>
+          <button class="btn primary" id="btnAddTelebirr" style="width:100%;">+ Add Account</button>
+        </div>
+        <div class="list" id="telebirrList"></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════
+         SUBADMINS SECTION
+    ═══════════════════════════════════════════ -->
+    <section class="section" id="secSubadmins">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">👥 SubAdmins</div>
+          <span class="chip" id="subadminCount">0</span>
+        </div>
+        <div class="loading" id="subadminLoading">
+          <div class="spinner"></div>
+          <div>Loading...</div>
+        </div>
+        <div class="list" id="subadminList"></div>
+        <div class="empty" id="subadminEmpty" style="display:none;">
+          <div class="empty-icon">👥</div>
+          <div class="empty-text">No subadmins found</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════
+         USERS SECTION
+    ═══════════════════════════════════════════ -->
+    <section class="section" id="secUsers">
+      <!-- Search -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">🔍 Search Users</div>
+          <span class="chip">Total: <b id="totalRegisteredUsers">0</b></span>
+        </div>
+        <div class="card-body">
+          <input id="userSearchInput" placeholder="Search by phone or username..." />
+          <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+            <span class="chip">Found: <b id="totalMatchedUsers">0</b></span>
+            <span class="chip">Loaded: <b id="loadedUsers">0</b></span>
+            <button class="btn secondary small" id="btnClearSearch">✕ Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- User List -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">👤 Users</div>
+          <span class="chip" id="userLoadInfo">—</span>
+        </div>
+        <div class="loading" id="userLoading">
+          <div class="spinner"></div>
+          <div>Loading...</div>
+        </div>
+        <div class="list" id="userList"></div>
+        <div class="empty" id="userEmpty" style="display:none;">
+          <div class="empty-icon">👤</div>
+          <div class="empty-text">No users found</div>
+        </div>
+        <div class="card-body" id="userLoadMoreWrap" style="display:none;">
+          <button class="btn secondary" id="btnLoadMoreUsers" style="width:100%;">↓ Load More</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ═══════════════════════════════════════════
+       USER MODAL
+  ═══════════════════════════════════════════ -->
+  <div class="modal-overlay" id="userModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title">👤 Edit User</div>
+        <button class="btn secondary small" id="btnCloseUserModal">✕</button>
+      </div>
+      <div class="modal-body" id="userModalBody"></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SUBADMIN MODAL
+  ═══════════════════════════════════════════ -->
+  <div class="modal-overlay" id="subadminModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title">👥 Edit SubAdmin</div>
+        <button class="btn secondary small" id="btnCloseSubadminModal">✕</button>
+      </div>
+      <div class="modal-body" id="subadminModalBody"></div>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    // ═══════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════
+
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+      tg.setBackgroundColor("#0f0f0f");
+      tg.setHeaderColor("#0f0f0f");
+    }
+
+    const API = "/admin/api";
+    const $ = (id) => document.getElementById(id);
+    const $$ = (sel) => document.querySelectorAll(sel);
+
+    // ═══════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════
+
+    const state = {
+      settings: null,
+      subadmins: [],
+      users: [],
+      usersSkip: 0,
+      totalRegistered: 0,
+      totalMatched: 0,
+      hasMoreUsers: false,
+      currentUser: null,
+      currentSubadmin: null,
+      activeTab: "settings",
+      txItems: [],
+      txSkip: 0,
+      txTotal: 0,
+      txHasMore: false,
+      txSummary: null,
+    };
+
+    // ═══════════════════════════════════════════
+    // HELPERS
+    // ═══════════════════════════════════════════
+
+    function showToast(text, type = "success", ms = 2500) {
+      const t = $("toast");
+      t.textContent = text;
+      t.className = `toast show ${type}`;
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => (t.className = "toast"), ms);
+    }
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = String(s ?? "");
+      return d.innerHTML;
+    }
+
+    function digitsOnly(v) {
+      return String(v || "").replace(/\D/g, "");
+    }
+
+    function formatBalance(n) {
+      return Number(n || 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    function formatDate(d) {
+      if (!d) return "—";
+      const date = new Date(d);
+      const now = new Date();
+      const diff = now - date;
+
+      if (diff < 60000) return "now";
+      if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+      if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+      return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+    }
+
+    function statusTag(s) {
+      const v = String(s || "active").toLowerCase();
+      if (v === "blocked") return `<span class="tag blocked">blocked</span>`;
+      if (v === "sleep") return `<span class="tag sleep">sleep</span>`;
+      return `<span class="tag active">active</span>`;
+    }
+
+    function txStatusTag(s) {
+      const v = String(s || "").toLowerCase();
+      if (v === "approved") return `<span class="tag approved">approved</span>`;
+      if (v === "rejected") return `<span class="tag rejected">rejected</span>`;
+      return `<span class="tag">${esc(s)}</span>`;
+    }
+
+    function txTypeTag(t) {
+      const v = String(t || "").toLowerCase();
+      if (v === "deposit") return `<span class="tag deposit">deposit</span>`;
+      if (v === "withdraw") return `<span class="tag withdraw">withdraw</span>`;
+      return `<span class="tag">${esc(t)}</span>`;
+    }
+
+    // ═══════════════════════════════════════════
+    // API
+    // ═══════════════════════════════════════════
+
+    async function api(path, options = {}, retry = true) {
+      try {
+        const res = await fetch(API + path, {
+          credentials: "include",
+          headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+          ...options,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401 && retry) {
+          await auth();
+          return api(path, options, false);
+        }
+        return { ok: res.ok, status: res.status, data };
+      } catch (e) {
+        return { ok: false, status: 0, data: { ok: false, error: e.message } };
+      }
+    }
+
+    // ═══════════════════════════════════════════
+    // AUTH
+    // ═══════════════════════════════════════════
+
+    async function auth() {
+      const initData = tg?.initData || "";
+      if (!initData) throw new Error("Open inside Telegram");
+      const r = await api("/auth", { method: "POST", body: JSON.stringify({ initData }) }, false);
+      if (!r.data?.ok) throw new Error(r.data?.error || "Auth failed");
+      $("authStatus").textContent = `✓ ${r.data.admin?.Username || "Admin"}`;
+    }
+
+    // ═══════════════════════════════════════════
+    // TAB MANAGEMENT
+    // ═══════════════════════════════════════════
+
+    function setTab(tab) {
+      state.activeTab = tab;
+      $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+      $("secSettings").classList.toggle("active", tab === "settings");
+      $("secSubadmins").classList.toggle("active", tab === "subadmins");
+      $("secUsers").classList.toggle("active", tab === "users");
+    }
+
+    // ═══════════════════════════════════════════
+    // SETTINGS
+    // ═══════════════════════════════════════════
+
+    async function loadSettings() {
+      const r = await api("/settings");
+      if (!r.data?.ok) return showToast("Failed to load settings", "error");
+      state.settings = r.data;
+
+      const s = r.data;
+
+      $("maxUserLimitVal").textContent = s.maxUserLimit ?? "—";
+      $("kanoRtpVal").textContent = s.kanoRtp ?? "—";
+
+      if (s.activeTelebirr?.phone) {
+        $("activeTbChip").innerHTML = `Active: <b>${esc(s.activeTelebirr.phone)}</b>`;
+        $("activeTelebirrDisplay").innerHTML = `${esc(s.activeTelebirr.name)} <span class="mono" style="color:var(--text-muted)">${esc(
+          s.activeTelebirr.phone
+        )}</span>`;
+      } else {
+        $("activeTbChip").textContent = "Not set";
+        $("activeTelebirrDisplay").textContent = "—";
+      }
+
+      const reg = s.registry || [];
+      $("registryCount").textContent = `${reg.length} phones`;
+      $("registryList").innerHTML = reg.length
+        ? reg
+            .map(
+              (x) => `
+        <div class="list-item">
+          <div class="left">
+            <div class="title mono">${esc(x.phone)}</div>
+          </div>
+          <button class="btn danger small" data-reg-remove="${esc(x.phone)}">✕ Remove</button>
+        </div>
+      `
+            )
+            .join("")
+        : `<div class="empty"><div class="empty-text">No registry phones</div></div>`;
+
+      const tb = s.telebirrAccounts || [];
+      $("telebirrCount").textContent = `${tb.length} accounts`;
+      const activePhone = s.activeTelebirr?.phone || "";
+
+      $("telebirrList").innerHTML = tb.length
+        ? tb
+            .map(
+              (t) => `
+        <div class="list-item">
+          <div class="left">
+            <div class="title">${esc(t.name)}</div>
+            <div class="meta">
+              <span class="mono">${esc(t.phone)}</span>
+              ${t.phone === activePhone ? `<span class="tag active">active</span>` : ""}
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn success small" data-tb-active="${esc(t.phone)}" ${t.phone === activePhone ? "disabled" : ""}>✓ Set Active</button>
+            <button class="btn danger small" data-tb-remove="${esc(t.phone)}">✕ Remove</button>
+          </div>
+        </div>
+      `
+            )
+            .join("")
+        : `<div class="empty"><div class="empty-text">No telebirr accounts</div></div>`;
+    }
+
+    // ═══════════════════════════════════════════
+    // SUBADMINS
+    // ═══════════════════════════════════════════
+
+    async function loadSubadmins() {
+      $("subadminLoading").style.display = "block";
+      $("subadminList").innerHTML = "";
+      $("subadminEmpty").style.display = "none";
+
+      const r = await api("/subadmins");
+      $("subadminLoading").style.display = "none";
+
+      if (!r.data?.ok) return showToast("Failed to load subadmins", "error");
+
+      state.subadmins = r.data.subadmins || [];
+      $("subadminCount").textContent = String(state.subadmins.length);
+      $("tabSubCount").textContent = String(state.subadmins.length);
+
+      if (!state.subadmins.length) {
+        $("subadminEmpty").style.display = "block";
+        return;
+      }
+
+      $("subadminList").innerHTML = state.subadmins
+        .map(
+          (sa) => `
+        <div class="list-item">
+          <div class="left">
+            <div class="title">${esc(sa.username || "SubAdmin")}</div>
+            <div class="meta">
+              ${statusTag(sa.status)}
+              <span class="mono">${esc(sa.phoneNumber || "—")}</span>
+              <span class="chip balance">💰 <b>${formatBalance(sa.balance)}</b> Birr</span>
+            </div>
+          </div>
+          <button class="btn secondary small" data-sa-edit="${esc(sa._id)}">✏️ Edit</button>
+        </div>
+      `
+        )
+        .join("");
+    }
+
+    async function fetchSubadminTransactions(subadminId, append = false) {
+      const limit = 50;
+      const skip = append ? state.txSkip : 0;
+
+      const r = await api(`/subadmins/${subadminId}/transactions?skip=${skip}&limit=${limit}`);
+      if (!r.data?.ok) return null;
+
+      state.txSummary = r.data.summary || null;
+      state.txTotal = Number(r.data.totalTransactions || 0);
+      state.txHasMore = !!r.data.hasMore;
+
+      const items = r.data.transactions || [];
+      if (!append) state.txItems = items;
+      else state.txItems = [...state.txItems, ...items];
+
+      state.txSkip = state.txItems.length;
+      return r.data;
+    }
+
+    function renderTxList() {
+      const txList = $("txList");
+      const txInfo = $("txInfo");
+      const wrap = $("txLoadMoreWrap");
+
+      if (!txList) return;
+
+      if (txInfo) txInfo.textContent = `${state.txItems.length}/${state.txTotal}`;
+
+      if (!state.txItems.length) {
+        txList.innerHTML = `<div class="tx-item"><div class="tx-left"><div class="tx-meta">No transactions found</div></div></div>`;
+        if (wrap) wrap.style.display = "none";
+        return;
+      }
+
+      txList.innerHTML = state.txItems
+        .map(
+          (tx) => `
+        <div class="tx-item">
+          <div class="tx-left">
+            <div class="tx-amount">${formatBalance(tx.amount)} Birr</div>
+            <div class="tx-meta">
+              ${tx.type === "deposit" ? esc(tx.senderPhone || "—") : esc(tx.receiverPhone || "—")}
+              ${tx.receiverFirstName ? " • " + esc(tx.receiverFirstName) : ""}
+            </div>
+            <div class="tx-meta">${formatDate(tx.approvedAt || tx.createdAt)}</div>
+          </div>
+          <div class="tx-tags">
+            ${txTypeTag(tx.type)}
+            ${txStatusTag(tx.status)}
+          </div>
+        </div>
+      `
+        )
+        .join("");
+
+      if (wrap) wrap.style.display = state.txHasMore ? "block" : "none";
+    }
+
+    async function openSubadminModal(id) {
+      const sa = state.subadmins.find((x) => String(x._id) === String(id));
+      if (!sa) return;
+
+      state.currentSubadmin = sa;
+
+      state.txItems = [];
+      state.txSkip = 0;
+      state.txTotal = 0;
+      state.txHasMore = false;
+      state.txSummary = null;
+
+      $("subadminModalBody").innerHTML = `<div class="loading"><div class="spinner"></div><div>Loading...</div></div>`;
+      $("subadminModal").classList.add("show");
+
+      await fetchSubadminTransactions(sa._id, false);
+
+      const balanceValue = Number(sa.balance || 0);
+      const summary = state.txSummary || {};
+
+      $("subadminModalBody").innerHTML = `
+        <div class="chip" style="width:100%; justify-content:space-between;">
+          <span>👤 ${esc(sa.username || "SubAdmin")}</span>
+          ${statusTag(sa.status)}
+        </div>
+
+        <div style="height:12px;"></div>
+
+        <div class="chip" style="width:100%;">
+          📱 Phone: <b class="mono">${esc(sa.phoneNumber || "—")}</b>
+        </div>
+
+        <div style="height:14px;"></div>
+
+        <div class="balance-display">
+          <div class="label">💼 Current Balance</div>
+          <div class="value" id="modalBalance">
+            ${formatBalance(balanceValue)}
+            <span class="currency">Birr</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; font-weight:700;">💰 Adjust Balance</div>
+          <div class="row">
+            <select id="saBalanceType" style="flex:0 0 140px;">
+              <option value="add">➕ Add (+)</option>
+              <option value="subtract">➖ Subtract (−)</option>
+            </select>
+            <input id="saBalanceAmount" type="number" step="0.01" placeholder="Amount" />
+            <button class="btn primary" id="btnAdjustBalance" style="flex:0 0 120px;">✓ Apply</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; font-weight:700;">📊 Summary</div>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="num">${Number(summary.totalDepositsApproved || 0)}</div>
+            <div class="lbl">Deposits ✓</div>
+          </div>
+          <div class="summary-item">
+            <div class="num">${Number(summary.totalDepositsRejected || 0)}</div>
+            <div class="lbl">Deposits ✕</div>
+          </div>
+          <div class="summary-item">
+            <div class="num">${Number(summary.totalWithdrawalsApproved || 0)}</div>
+            <div class="lbl">Withdraws ✓</div>
+          </div>
+          <div class="summary-item">
+            <div class="num">${Number(summary.totalWithdrawalsRejected || 0)}</div>
+            <div class="lbl">Withdraws ✕</div>
+          </div>
+        </div>
+
+        <div class="chip" style="width:100%; justify-content:space-between; margin-bottom:12px;">
+          <span>📋 Transactions</span>
+          <b id="txInfo">${state.txItems.length}/${state.txTotal}</b>
+        </div>
+
+        <div class="tx-list" id="txList"></div>
+
+        <div id="txLoadMoreWrap" style="margin-top:12px; display:${state.txHasMore ? "block" : "none"};">
+          <button class="btn secondary" id="btnLoadMoreTx" style="width:100%;">↓ Load More</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; font-weight:700;">⚙️ Status</div>
+        <div class="row">
+          <select id="saStatus">
+            <option value="active" ${String(sa.status).toLowerCase() === "active" ? "selected" : ""}>✓ Active</option>
+            <option value="sleep" ${String(sa.status).toLowerCase() === "sleep" ? "selected" : ""}>💤 Sleep</option>
+            <option value="blocked" ${String(sa.status).toLowerCase() === "blocked" ? "selected" : ""}>🚫 Blocked</option>
+          </select>
+        </div>
+
+        <div style="height:12px;"></div>
+
+        <button class="btn primary" id="btnSaveSubadmin" style="width:100%;">💾 Save Changes</button>
+      `;
+
+      renderTxList();
+
+      $("btnAdjustBalance").onclick = adjustSubadminBalance;
+      $("btnSaveSubadmin").onclick = saveSubadmin;
+
+      const btnLoad = $("btnLoadMoreTx");
+      if (btnLoad) btnLoad.onclick = loadMoreTx;
+    }
+
+    async function loadMoreTx() {
+      const sa = state.currentSubadmin;
+      if (!sa) return;
+
+      const btn = $("btnLoadMoreTx");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Loading...";
+      }
+
+      const ok = await fetchSubadminTransactions(sa._id, true);
+      if (!ok) showToast("Failed to load more", "error");
+
+      renderTxList();
+
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "↓ Load More";
+      }
+    }
+
+    async function adjustSubadminBalance() {
+      const sa = state.currentSubadmin;
+      if (!sa) return;
+
+      const type = $("saBalanceType").value;
+      const raw = Number($("saBalanceAmount").value || 0);
+      if (!Number.isFinite(raw) || raw <= 0) return showToast("Enter valid amount", "error");
+
+      const amount = type === "subtract" ? -raw : raw;
+
+      const r = await api("/subadmins/adjust-balance", {
+        method: "POST",
+        body: JSON.stringify({ subadminId: sa._id, amount }),
+      });
+
+      if (!r.data?.ok) return showToast("Failed: " + (r.data?.error || "ERR"), "error");
+
+      const newBal = Number(r.data.subadmin?.balance || 0);
+      sa.balance = newBal;
+
+      $("modalBalance").innerHTML = `${formatBalance(newBal)} <span class="currency">Birr</span>`;
+      $("saBalanceAmount").value = "";
+
+      await loadSubadmins();
+      showToast("✓ Balance updated", "success");
+    }
+
+    async function saveSubadmin() {
+      const sa = state.currentSubadmin;
+      const status = $("saStatus").value;
+
+      const r = await api("/subadmins/update", {
+        method: "POST",
+        body: JSON.stringify({ subadminId: sa._id, status }),
+      });
+
+      if (!r.data?.ok) return showToast("Failed to update", "error");
+
+      showToast("✓ SubAdmin updated", "success");
+      $("subadminModal").classList.remove("show");
+      await loadSubadmins();
+    }
+
+    // ═══════════════════════════════════════════
+    // USERS
+    // ═══════════════════════════════════════════
+
+    async function loadUsers(append = false) {
+      const q = $("userSearchInput").value.trim();
+      const limit = 50;
+      const skip = append ? state.usersSkip : 0;
+
+      if (!append) {
+        $("userLoading").style.display = "block";
+        $("userList").innerHTML = "";
+        $("userEmpty").style.display = "none";
+      }
+
+      const r = await api(`/users?search=${encodeURIComponent(q)}&skip=${skip}&limit=${limit}`);
+      $("userLoading").style.display = "none";
+
+      if (!r.data?.ok) return showToast("Failed to load users", "error");
+
+      state.totalRegistered = Number(r.data.totalRegistered || 0);
+      state.totalMatched = Number(r.data.totalMatched || 0);
+
+      if (!append) state.users = [];
+      state.users = [...state.users, ...(r.data.users || [])];
+
+      state.usersSkip = state.users.length;
+      state.hasMoreUsers = !!r.data.hasMore;
+
+      $("totalRegisteredUsers").textContent = String(state.totalRegistered);
+      $("totalMatchedUsers").textContent = String(state.totalMatched);
+      $("loadedUsers").textContent = String(state.users.length);
+      $("userLoadInfo").textContent = state.totalMatched ? `${state.users.length}/${state.totalMatched}` : "—";
+      $("tabUserCount").textContent = String(state.totalRegistered);
+
+      renderUsers();
+    }
+
+    function renderUsers() {
+      const list = $("userList");
+      if (!state.users.length) {
+        $("userEmpty").style.display = "block";
+        $("userLoadMoreWrap").style.display = "none";
+        return;
+      }
+
+      list.innerHTML = state.users
+        .map(
+          (u) => `
+        <div class="list-item">
+          <div class="left">
+            <div class="title">${esc(u.username || "User")}</div>
+            <div class="meta">
+              ${statusTag(u.status)}
+              <span class="mono">${esc(u.phoneNo || "—")}</span>
+              <span class="chip">💰 <b>${formatBalance(u.Balance)}</b> Birr</span>
+            </div>
+          </div>
+          <button class="btn secondary small" data-user-edit="${esc(u._id)}">✏️ Edit</button>
+        </div>
+      `
+        )
+        .join("");
+
+      $("userLoadMoreWrap").style.display = state.hasMoreUsers ? "block" : "none";
+    }
+
+    function openUserModal(id) {
+      const u = state.users.find((x) => String(x._id) === String(id));
+      if (!u) return;
+
+      state.currentUser = u;
+
+      $("userModalBody").innerHTML = `
+        <div class="chip" style="width:100%; justify-content:space-between;">
+          <span>👤 ${esc(u.username || "User")}</span>
+          ${statusTag(u.status)}
+        </div>
+
+        <div style="height:12px;"></div>
+
+        <div class="chip" style="width:100%;">
+          📱 Phone: <b class="mono">${esc(u.phoneNo || "—")}</b>
+        </div>
+
+        <div style="height:12px;"></div>
+
+        <div class="chip" style="width:100%;">
+          💰 Balance: <b>${formatBalance(u.Balance)}</b> Birr
+        </div>
+
+        <div style="height:14px;"></div>
+
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; font-weight:700;">💰 Adjust Balance</div>
+        <div class="row">
+          <select id="adjustType">
+            <option value="add">➕ Add (+)</option>
+            <option value="subtract">➖ Subtract (−)</option>
+          </select>
+          <input id="adjustAmount" type="number" step="0.01" placeholder="Amount" />
+        </div>
+
+        <div style="height:12px;"></div>
+
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; font-weight:700;">⚙️ Status</div>
+        <div class="row">
+          <select id="userStatus">
+            <option value="active" ${String(u.status).toLowerCase() === "active" ? "selected" : ""}>✓ Active</option>
+            <option value="blocked" ${String(u.status).toLowerCase() === "blocked" ? "selected" : ""}>🚫 Blocked</option>
+          </select>
+        </div>
+
+        <div style="height:14px;"></div>
+
+        <button class="btn primary" id="btnSaveUser" style="width:100%;">💾 Save Changes</button>
+      `;
+
+      $("btnSaveUser").onclick = saveUser;
+      $("userModal").classList.add("show");
+    }
+
+    async function saveUser() {
+      const u = state.currentUser;
+      const t = $("adjustType").value;
+      const amount = Number($("adjustAmount").value || 0);
+      const status = $("userStatus").value;
+      const adjustBalance = t === "subtract" ? -amount : amount;
+
+      const r = await api("/users/update", {
+        method: "POST",
+        body: JSON.stringify({ userId: u._id, adjustBalance, status }),
+      });
+
+      if (!r.data?.ok) return showToast("Failed to update", "error");
+
+      showToast("✓ User updated", "success");
+      $("userModal").classList.remove("show");
+      state.usersSkip = 0;
+      await loadUsers(false);
+    }
+
+    // ═══════════════════════════════════════════
+    // EVENT LISTENERS
+    // ═══════════════════════════════════════════
+
+    $$(".tab").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const tab = btn.dataset.tab;
+        setTab(tab);
+        if (tab === "settings") await loadSettings();
+        if (tab === "subadmins") await loadSubadmins();
+        if (tab === "users") {
+          state.usersSkip = 0;
+          await loadUsers(false);
+        }
+      });
+    });
+
+    $("btnRefresh").onclick = async () => {
+      if (state.activeTab === "settings") return loadSettings();
+      if (state.activeTab === "subadmins") return loadSubadmins();
+      if (state.activeTab === "users") {
+        state.usersSkip = 0;
+        return loadUsers(false);
+      }
+    };
+
+    $("btnSetMaxUserLimit").onclick = async () => {
+      const v = Number($("maxUserLimitInput").value);
+      if (!Number.isFinite(v) || v < 1) return showToast("Enter valid limit", "error");
+
+      const r = await api("/maxuserlimit", { method: "POST", body: JSON.stringify({ maxUserLimit: v }) });
+      if (r.data?.ok) {
+        showToast("✓ Updated", "success");
+        $("maxUserLimitInput").value = "";
+        loadSettings();
+      } else showToast("Update failed", "error");
+    };
+
+    $("btnSetKanoRtp").onclick = async () => {
+      const v = Number($("kanoRtpInput").value);
+      if (!Number.isFinite(v) || v < 1 || v > 100) return showToast("RTP must be 1-100", "error");
+
+      const r = await api("/kano/rtp", { method: "POST", body: JSON.stringify({ rtp: v }) });
+      if (r.data?.ok) {
+        showToast("✓ Updated", "success");
+        $("kanoRtpInput").value = "";
+        loadSettings();
+      } else showToast("Update failed", "error");
+    };
+
+    $("btnAddRegistry").onclick = async () => {
+      const phone = digitsOnly($("registryPhoneInput").value);
+      if (!phone || phone.length < 9) return showToast("Enter valid phone", "error");
+
+      const r = await api("/registry/add", { method: "POST", body: JSON.stringify({ phone }) });
+      if (r.data?.ok) {
+        showToast("✓ Added", "success");
+        $("registryPhoneInput").value = "";
+        loadSettings();
+      } else showToast("Add failed", "error");
+    };
+
+    $("registryList").addEventListener("click", async (e) => {
+      const phone = e.target?.dataset?.regRemove;
+      if (!phone) return;
+      if (!confirm("Remove this phone?")) return;
+
+      const r = await api("/registry/remove", { method: "POST", body: JSON.stringify({ phone }) });
+      if (r.data?.ok) {
+        showToast("✓ Removed", "success");
+        loadSettings();
+      } else showToast("Remove failed", "error");
+    });
+
+    $("btnAddTelebirr").onclick = async () => {
+      const phone = digitsOnly($("tbPhoneInput").value);
+      const firstName = $("tbFirstInput").value.trim();
+      const fatherName = $("tbFatherInput").value.trim();
+
+      if (!phone || phone.length < 9 || !firstName || !fatherName) {
+        return showToast("Fill all fields", "error");
+      }
+
+      const r = await api("/telebirr/add", {
+        method: "POST",
+        body: JSON.stringify({ phone, firstName, fatherName }),
+      });
+
+      if (r.data?.ok) {
+        showToast("✓ Added", "success");
+        $("tbPhoneInput").value = "";
+        $("tbFirstInput").value = "";
+        $("tbFatherInput").value = "";
+        loadSettings();
+      } else showToast("Add failed", "error");
+    };
+
+    $("telebirrList").addEventListener("click", async (e) => {
+      const pActive = e.target?.dataset?.tbActive;
+      const pRemove = e.target?.dataset?.tbRemove;
+
+      if (pActive) {
+        const r = await api("/telebirr/setActive", { method: "POST", body: JSON.stringify({ phone: pActive }) });
+        if (r.data?.ok) {
+          showToast("✓ Active updated", "success");
+          loadSettings();
+        } else showToast("Failed", "error");
+      }
+
+      if (pRemove) {
+        if (!confirm("Remove this account?")) return;
+        const r = await api("/telebirr/remove", { method: "POST", body: JSON.stringify({ phone: pRemove }) });
+        if (r.data?.ok) {
+          showToast("✓ Removed", "success");
+          loadSettings();
+        } else showToast("Failed", "error");
+      }
+    });
+
+    $("subadminList").addEventListener("click", (e) => {
+      const id = e.target?.dataset?.saEdit;
+      if (id) openSubadminModal(id);
+    });
+
+    $("btnCloseSubadminModal").onclick = () => $("subadminModal").classList.remove("show");
+    $("subadminModal").addEventListener("click", (e) => {
+      if (e.target.id === "subadminModal") $("subadminModal").classList.remove("show");
+    });
+
+    $("userList").addEventListener("click", (e) => {
+      const id = e.target?.dataset?.userEdit;
+      if (id) openUserModal(id);
+    });
+
+    $("btnCloseUserModal").onclick = () => $("userModal").classList.remove("show");
+    $("userModal").addEventListener("click", (e) => {
+      if (e.target.id === "userModal") $("userModal").classList.remove("show");
+    });
+
+    let tSearch = null;
+    $("userSearchInput").addEventListener("input", () => {
+      clearTimeout(tSearch);
+      tSearch = setTimeout(() => {
+        state.usersSkip = 0;
+        loadUsers(false);
+      }, 350);
+    });
+
+    $("btnLoadMoreUsers").onclick = () => loadUsers(true);
+
+    $("btnClearSearch").onclick = () => {
+      $("userSearchInput").value = "";
+      state.usersSkip = 0;
+      loadUsers(false);
+    };
+
+    // ═══════════════════════════════════════════
+    // INIT
+    // ═══════════════════════════════════════════
+
+    (async () => {
+      try {
+        await auth();
+        await loadSettings();
+        setTab("settings");
+      } catch (e) {
+        $("authStatus").textContent = "❌ " + (e.message || "Auth failed");
+        showToast(e.message || "Auth failed", "error", 4000);
+      }
+    })();
+  </script>
+</body>
+</html>

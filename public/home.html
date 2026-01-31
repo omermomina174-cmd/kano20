@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0a0e17" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>KANO20 - Play & Win</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><defs><linearGradient id=%22g%22 x1=%220%25%22 y1=%220%25%22 x2=%22100%25%22 y2=%22100%25%22><stop offset=%220%25%22 stop-color=%22%23fbbf24%22/><stop offset=%22100%25%22 stop-color=%22%23f59e0b%22/></linearGradient></defs><rect width=%2264%22 height=%2264%22 rx=%2216%22 fill=%22%230a0e17%22/><text x=%2232%22 y=%2246%22 text-anchor=%22middle%22 font-size=%2232%22 fill=%22url(%23g)%22 font-family=%22Arial%22 font-weight=%22bold%22>K</text></svg>">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #0f1520;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2235;
+      --bg-elevated: #1e2738;
+      --gold-400: #fcd34d;
+      --gold-500: #fbbf24;
+      --gold-600: #f59e0b;
+      --gold-glow: rgba(251, 191, 36, 0.5);
+      --neon-green: #10b981;
+      --neon-green-glow: rgba(16, 185, 129, 0.4);
+      --neon-purple: #8b5cf6;
+      --neon-purple-dim: #7c3aed;
+      --neon-purple-glow: rgba(139, 92, 246, 0.5);
+      --neon-red: #ef4444;
+      --neon-red-glow: rgba(239, 68, 68, 0.4);
+      --neon-cyan: #06b6d4;
+      --silver: #c0c0c0;
+      --silver-dim: #a8a8a8;
+      --bronze: #cd7f32;
+      --border-dim: rgba(255, 255, 255, 0.06);
+      --border-default: rgba(255, 255, 255, 0.08);
+      --border-bright: rgba(255, 255, 255, 0.12);
+      --border-gold: rgba(251, 191, 36, 0.3);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+      --radius-full: 9999px;
+      --font-sans: 'Inter', -apple-system, sans-serif;
+      --font-display: 'Orbitron', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --nav-height: 64px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.4;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .app {
+      height: 100svh;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, #0a0e17 0%, #111827 100%);
+      position: relative;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ========== TOP BAR ========== */
+    .top-bar {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-default);
+      min-height: 48px;
+    }
+
+    .top-bar__user {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 800;
+      color: var(--bg-primary);
+      font-size: 14px;
+      flex-shrink: 0;
+      box-shadow: 0 0 12px var(--gold-glow);
+    }
+
+    .top-bar__name {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    .top-bar__balance {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid var(--border-gold);
+      padding: 6px 12px;
+      border-radius: var(--radius-full);
+    }
+
+    .top-bar__balance-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--gold-500);
+    }
+
+    .top-bar__balance-icon svg {
+      width: 100%;
+      height: 100%;
+      stroke: currentColor;
+      stroke-width: 2.5;
+      fill: none;
+    }
+
+    .top-bar__balance-amount {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--gold-500);
+    }
+
+    .top-bar__balance-unit {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gold-600);
+    }
+
+    /* ========== MAIN CONTENT ========== */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 12px;
+      padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + 12px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .main-content::-webkit-scrollbar { width: 3px; }
+    .main-content::-webkit-scrollbar-thumb {
+      background: var(--gold-600);
+      border-radius: var(--radius-full);
+    }
+
+    .section {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .section.is-active {
+      display: flex;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ========== PLAY CARD ========== */
+    .play-card {
+      position: relative;
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      background: var(--bg-card);
+      border: 1px solid var(--border-gold);
+      box-shadow: 0 0 30px rgba(251, 191, 36, 0.15);
+    }
+
+    .play-card__bg {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 30% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 80%, rgba(251, 191, 36, 0.1) 0%, transparent 50%);
+    }
+
+    .play-card__content {
+      position: relative;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .play-card__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .play-card__title {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--gold-400) 0%, var(--gold-600) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 0 10px var(--gold-glow));
+    }
+
+    .play-card__subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .play-card__badge {
+      background: var(--neon-red);
+      padding: 5px 12px;
+      border-radius: var(--radius-full);
+      font-size: 10px;
+      font-weight: 800;
+      color: white;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 15px var(--neon-red-glow);
+      animation: pulseBadge 2s ease-in-out infinite;
+    }
+
+    @keyframes pulseBadge {
+      0%, 100% { box-shadow: 0 0 15px var(--neon-red-glow); }
+      50% { box-shadow: 0 0 25px var(--neon-red-glow); }
+    }
+
+    .play-card__badge-dot {
+      width: 5px;
+      height: 5px;
+      background: white;
+      border-radius: var(--radius-full);
+      animation: blink 1s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .play-card__jackpot {
+      text-align: center;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-dim);
+    }
+
+    .play-card__jackpot-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 6px;
+    }
+
+    .play-card__jackpot-amount {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 900;
+      color: var(--gold-500);
+      text-shadow: 0 0 20px var(--gold-glow);
+    }
+
+    .btn-play {
+      width: 100%;
+      padding: 16px 24px;
+      border: none;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
+      color: var(--bg-primary);
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 18px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px var(--gold-glow);
+      text-transform: uppercase;
+    }
+
+    .btn-play svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    .btn-play:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .btn-play:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    /* ========== QUICK STATS (icons only) ========== */
+    .quick-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .quick-stat {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 14px 10px;
+      text-align: center;
+      border: 1px solid var(--border-default);
+    }
+
+    .quick-stat__icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 6px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .quick-stat__icon--gold {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--gold-500);
+    }
+
+    .quick-stat__icon--green {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--neon-green);
+    }
+
+    .quick-stat__icon--purple {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--neon-purple);
+    }
+
+    .quick-stat__icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .quick-stat__label {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+      font-weight: 700;
+    }
+
+    /* ========== SECTION HEADER ========== */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title__icon {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .section-title__icon--gold {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--gold-500);
+    }
+
+    .section-title__icon--purple {
+      background: rgba(139, 92, 246, 0.15);
+      color: var(--neon-purple);
+    }
+
+    .section-title__icon--green {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--neon-green);
+    }
+
+    .section-title__icon--cyan {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--neon-cyan);
+    }
+
+    .section-title__icon svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    /* ========== SEGMENTS ========== */
+    .segment-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .segment {
+      flex: 1;
+      display: flex;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+      border: 1px solid var(--border-default);
+    }
+
+    .segment--sm {
+      flex: none;
+      width: auto;
+    }
+
+    .segment__btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .segment__btn.is-active {
+      background: linear-gradient(135deg, var(--neon-purple) 0%, var(--neon-purple-dim) 100%);
+      color: white;
+      box-shadow: 0 0 15px var(--neon-purple-glow);
+    }
+
+    .segment__btn--gold.is-active {
+      background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
+      color: var(--bg-primary);
+      box-shadow: 0 0 15px var(--gold-glow);
+    }
+
+    /* ========== LIST ========== */
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .list-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-default);
+      transition: all 0.2s;
+    }
+
+    .list-item__icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .list-item__icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .list-item__icon--deposit {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--neon-green);
+    }
+
+    .list-item__icon--withdraw {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--neon-red);
+    }
+
+    .list-item__content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .list-item__title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .list-item__subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .list-item__badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: var(--radius-full);
+      text-transform: uppercase;
+    }
+
+    .list-item__badge--approved {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--neon-green);
+    }
+
+    .list-item__badge--pending {
+      background: rgba(251, 191, 36, 0.15);
+      color: var(--gold-500);
+    }
+
+    .list-item__badge--rejected {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--neon-red);
+    }
+
+    .list-item__amount {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .list-item__amount--deposit { color: var(--neon-green); }
+    .list-item__amount--withdraw { color: var(--neon-red); }
+    .list-item__amount--rejected { 
+      color: var(--text-muted); 
+      text-decoration: line-through;
+    }
+
+    .list-item__amount-currency {
+      font-size: 9px;
+      color: var(--text-muted);
+      font-family: var(--font-sans);
+      margin-left: 2px;
+    }
+
+    /* ========== WINNER ITEM ========== */
+    .winner-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-default);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+
+    .winner-item--1st {
+      border-color: var(--border-gold);
+      background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, var(--bg-card) 100%);
+      box-shadow: 0 0 20px rgba(251, 191, 36, 0.15);
+    }
+
+    .winner-item--1st::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--gold-500), var(--gold-600), var(--gold-500));
+    }
+
+    .winner-item--2nd {
+      border-color: rgba(192, 192, 192, 0.3);
+      background: linear-gradient(135deg, rgba(192, 192, 192, 0.08) 0%, var(--bg-card) 100%);
+    }
+
+    .winner-item--3rd {
+      border-color: rgba(205, 127, 50, 0.3);
+      background: linear-gradient(135deg, rgba(205, 127, 50, 0.08) 0%, var(--bg-card) 100%);
+    }
+
+    .winner-item__rank {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .winner-item__rank--1 {
+      background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
+      box-shadow: 0 0 20px var(--gold-glow);
+    }
+
+    .winner-item__rank--2 {
+      background: linear-gradient(135deg, var(--silver) 0%, var(--silver-dim) 100%);
+      box-shadow: 0 0 12px rgba(192, 192, 192, 0.4);
+    }
+
+    .winner-item__rank--3 {
+      background: linear-gradient(135deg, var(--bronze) 0%, #a0522d 100%);
+      box-shadow: 0 0 12px rgba(205, 127, 50, 0.4);
+    }
+
+    .winner-item__rank-icon {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .winner-item__info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .winner-item__name {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .winner-item__crown {
+      font-size: 16px;
+      animation: crownBounce 2s ease-in-out infinite;
+    }
+
+    @keyframes crownBounce {
+      0%, 100% { transform: translateY(0) rotate(-5deg); }
+      50% { transform: translateY(-3px) rotate(5deg); }
+    }
+
+    .winner-item__games {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .winner-item__games svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .winner-item__payout {
+      text-align: right;
+    }
+
+    .winner-item__payout-amount {
+      font-family: var(--font-mono);
+      font-weight: 800;
+      font-size: 16px;
+      color: var(--neon-green);
+    }
+
+    .winner-item--1st .winner-item__payout-amount {
+      color: var(--gold-500);
+      text-shadow: 0 0 10px var(--gold-glow);
+    }
+
+    .winner-item__payout-label {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ========== LEADERBOARD TOGGLE ========== */
+    .leaderboard-toggle {
+      display: flex;
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 4px;
+      border: 1px solid var(--border-default);
+      margin-bottom: 12px;
+    }
+
+    .leaderboard-toggle__btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border: none;
+      background: transparent;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .leaderboard-toggle__btn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .leaderboard-toggle__btn.is-active {
+      background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
+      color: var(--bg-primary);
+      box-shadow: 0 0 15px var(--gold-glow);
+    }
+
+    .leaderboard-toggle__btn:active {
+      transform: scale(0.98);
+    }
+
+    /* ========== WINNERS CONTAINER ========== */
+    .winners-container {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      border: 1px solid var(--border-default);
+    }
+
+    .winners-container__header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-dim);
+    }
+
+    .winners-container__icon {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .winners-container__icon--daily {
+      background: rgba(6, 182, 212, 0.15);
+    }
+
+    .winners-container__icon--weekly {
+      background: rgba(251, 191, 36, 0.15);
+    }
+
+    .winners-container__title {
+      font-weight: 800;
+      font-size: 15px;
+      color: var(--text-primary);
+    }
+
+    .winners-container__subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .winners-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .empty-state {
+      text-align: center;
+      padding: 28px 16px;
+      color: var(--text-muted);
+      font-size: 12px;
+      background: var(--bg-card);
+      border: 1px dashed var(--border-default);
+      border-radius: var(--radius-lg);
+      font-weight: 500;
+    }
+
+    .empty-state__icon {
+      width: 44px;
+      height: 44px;
+      background: var(--bg-elevated);
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 10px;
+      border: 1px solid var(--border-default);
+    }
+
+    .empty-state__icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: var(--text-muted);
+      stroke-width: 1.5;
+      fill: none;
+    }
+
+    /* ========== ACCOUNT CARD ========== */
+    .account-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 24px 20px;
+      text-align: center;
+      border: 1px solid var(--border-default);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .account-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(251, 191, 36, 0.05) 100%);
+    }
+
+    .account-card__avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-xl);
+      background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 800;
+      color: var(--bg-primary);
+      font-size: 24px;
+      margin: 0 auto 12px;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 0 20px var(--gold-glow);
+    }
+
+    .account-card__name {
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .account-card__id {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .account-card__stats {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-bottom: 16px;
+      padding: 16px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-dim);
+      position: relative;
+      z-index: 1;
+    }
+
+    .account-stat { text-align: center; }
+
+    .account-stat__value {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--text-primary);
+    }
+
+    .account-stat__value--gold { color: var(--gold-500); }
+
+    .account-stat__label {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .btn-logout {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--border-default);
+      background: transparent;
+      border-radius: var(--radius-lg);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+      position: relative;
+      z-index: 1;
+    }
+
+    .btn-logout:hover {
+      border-color: var(--neon-red);
+      color: var(--neon-red);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .btn-logout:active { transform: scale(0.98); }
+
+    .btn-logout svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    /* ========== STATUS BAR ========== */
+    .status-bar {
+      flex-shrink: 0;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-gold);
+    }
+
+    .status-bar.is-visible { display: flex; }
+
+    .status-bar__spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: var(--radius-full);
+      border: 2px solid rgba(251, 191, 36, 0.3);
+      border-top-color: var(--gold-500);
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .status-bar__text {
+      font-size: 12px;
+      font-weight: 600;
+      flex: 1;
+      color: var(--gold-500);
+    }
+
+    .btn-retry {
+      background: linear-gradient(135deg, var(--gold-500) 0%, var(--gold-600) 100%);
+      color: var(--bg-primary);
+      border: none;
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    /* ========== NAVIGATION ========== */
+    .nav {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: calc(var(--nav-height) + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding-left: 8px;
+      padding-right: 8px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-gold);
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 6px 12px;
+      min-width: 60px;
+    }
+
+    .nav-item__icon {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+
+    .nav-item__icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: var(--text-muted);
+      fill: none;
+      stroke-width: 1.75;
+      transition: all 0.2s;
+    }
+
+    .nav-item__label {
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .nav-item.is-active .nav-item__icon {
+      background: rgba(251, 191, 36, 0.15);
+      border-color: var(--border-gold);
+    }
+
+    .nav-item.is-active .nav-item__icon svg {
+      stroke: var(--gold-500);
+      stroke-width: 2;
+    }
+
+    .nav-item.is-active .nav-item__label {
+      color: var(--gold-500);
+      font-weight: 700;
+    }
+
+    .nav-item:active .nav-item__icon { transform: scale(0.92); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="status-bar" id="statusBar">
+      <div class="status-bar__spinner" id="statusSpinner"></div>
+      <span class="status-bar__text" id="statusText">Connecting…</span>
+      <div class="hidden" id="statusActions">
+        <button class="btn-retry" id="retryBtn" type="button">Retry</button>
+      </div>
+    </header>
+
+    <div class="top-bar">
+      <div class="top-bar__user">
+        <div class="avatar" id="avatarTop">K</div>
+        <span class="top-bar__name" id="nameTop">Player</span>
+      </div>
+      <div class="top-bar__balance">
+        <div class="top-bar__balance-icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v12M9 9h6M9 15h6"/>
+          </svg>
+        </div>
+        <span class="top-bar__balance-amount" id="balanceTop">0.00</span>
+        <span class="top-bar__balance-unit">ብር</span>
+      </div>
+    </div>
+
+    <main class="main-content" id="mainContent">
+      <!-- HOME SECTION -->
+      <section class="section is-active" id="sectionHome">
+        <article class="play-card">
+          <div class="play-card__bg"></div>
+          <div class="play-card__content">
+            <div class="play-card__header">
+              <div>
+                <div class="play-card__title">KANO 20</div>
+                <div class="play-card__subtitle">Pick numbers, win big!</div>
+              </div>
+              <div class="play-card__badge">
+                <span class="play-card__badge-dot"></span>
+                LIVE
+              </div>
+            </div>
+
+            <div class="play-card__jackpot">
+              <div class="play-card__jackpot-label">Max Jackpot</div>
+              <div class="play-card__jackpot-amount">50,000 ብር</div>
+            </div>
+
+            <button class="btn-play" id="playBtn" type="button">
+              <svg viewBox="0 0 24 24">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <span id="playBtnText">Play Now</span>
+            </button>
+          </div>
+        </article>
+
+        <div class="quick-stats">
+          <div class="quick-stat">
+            <div class="quick-stat__icon quick-stat__icon--gold">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+              </svg>
+            </div>
+            <div class="quick-stat__label">Today Wins</div>
+          </div>
+          <div class="quick-stat">
+            <div class="quick-stat__icon quick-stat__icon--green">
+              <svg viewBox="0 0 24 24">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                <polyline points="17 6 23 6 23 12"/>
+              </svg>
+            </div>
+            <div class="quick-stat__label">Win Rate</div>
+          </div>
+          <div class="quick-stat">
+            <div class="quick-stat__icon quick-stat__icon--purple">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+            <div class="quick-stat__label">Games</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HISTORY SECTION -->
+      <section class="section" id="sectionHistory">
+        <header class="section-header">
+          <h2 class="section-title">
+            <span class="section-title__icon section-title__icon--purple">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </span>
+            Transactions
+          </h2>
+        </header>
+
+        <div class="segment-row">
+          <div class="segment">
+            <button class="segment__btn is-active" id="txRangeDay" type="button">Today</button>
+            <button class="segment__btn" id="txRangeWeek" type="button">Week</button>
+          </div>
+          <div class="segment">
+            <button class="segment__btn" id="txStatusPending" type="button">Pending</button>
+            <button class="segment__btn is-active" id="txStatusDone" type="button">Done</button>
+          </div>
+        </div>
+
+        <div class="list" id="txList">
+          <div class="empty-state">
+            <div class="empty-state__icon">
+              <svg viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+            </div>
+            Loading transactions…
+          </div>
+        </div>
+      </section>
+
+      <!-- LEADERBOARD SECTION -->
+      <section class="section" id="sectionLeader">
+        <header class="section-header">
+          <h2 class="section-title">
+            <span class="section-title__icon section-title__icon--gold">
+              <svg viewBox="0 0 24 24">
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                <path d="M4 22h16" />
+                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+              </svg>
+            </span>
+            Top Winners
+          </h2>
+        </header>
+
+        <!-- Leaderboard Toggle -->
+        <div class="leaderboard-toggle">
+          <button class="leaderboard-toggle__btn is-active" id="lbToggleDaily" type="button">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            Daily
+          </button>
+          <button class="leaderboard-toggle__btn" id="lbToggleWeekly" type="button">
+            <svg viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            Weekly
+          </button>
+        </div>
+
+        <!-- Winners Container -->
+        <div class="winners-container" id="winnersContainer">
+          <!-- Daily Winners -->
+          <div id="dailyWinnersPanel">
+            <div class="winners-container__header">
+              <div class="winners-container__icon winners-container__icon--daily">☀️</div>
+              <div>
+                <div class="winners-container__title">Today's Champions</div>
+                <div class="winners-container__subtitle">Resets at midnight EAT</div>
+              </div>
+            </div>
+            <div class="winners-list" id="dailyWinnersList">
+              <div class="empty-state">Loading…</div>
+            </div>
+          </div>
+
+          <!-- Weekly Winners -->
+          <div id="weeklyWinnersPanel" class="hidden">
+            <div class="winners-container__header">
+              <div class="winners-container__icon winners-container__icon--weekly">🏆</div>
+              <div>
+                <div class="winners-container__title">This Week's Legends</div>
+                <div class="winners-container__subtitle">Resets every Monday</div>
+              </div>
+            </div>
+            <div class="winners-list" id="weeklyWinnersList">
+              <div class="empty-state">Loading…</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ACCOUNT SECTION -->
+      <section class="section" id="sectionAccount">
+        <header class="section-header">
+          <h2 class="section-title">
+            <span class="section-title__icon section-title__icon--green">
+              <svg viewBox="0 0 24 24">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </span>
+            My Account
+          </h2>
+        </header>
+
+        <article class="account-card">
+          <div class="account-card__avatar" id="avatarAcc">K</div>
+          <h3 class="account-card__name" id="nameAcc">Player</h3>
+          <p class="account-card__id" id="accountId">ID: #000000</p>
+
+          <div class="account-card__stats">
+            <div class="account-stat">
+              <div class="account-stat__value account-stat__value--gold" id="accBalance">0.00</div>
+              <div class="account-stat__label">ብር Balance</div>
+            </div>
+            <div class="account-stat">
+              <div class="account-stat__value" id="accGamesWeek">0</div>
+              <div class="account-stat__label">Weekly Games</div>
+            </div>
+          </div>
+
+          <button class="btn-logout" id="logoutBtn" type="button">
+            <svg viewBox="0 0 24 24">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            Log Out
+          </button>
+        </article>
+      </section>
+    </main>
+
+    <nav class="nav">
+      <button class="nav-item is-active" data-tab="home" type="button">
+        <div class="nav-item__icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
+        </div>
+        <span class="nav-item__label">Home</span>
+      </button>
+
+      <button class="nav-item" data-tab="history" type="button">
+        <div class="nav-item__icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+        </div>
+        <span class="nav-item__label">History</span>
+      </button>
+
+      <button class="nav-item" data-tab="leader" type="button">
+        <div class="nav-item__icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+            <path d="M4 22h16" />
+            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+          </svg>
+        </div>
+        <span class="nav-item__label">Leaders</span>
+      </button>
+
+      <button class="nav-item" data-tab="account" type="button">
+        <div class="nav-item__icon">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="5" />
+            <path d="M20 21a8 8 0 1 0-16 0" />
+          </svg>
+        </div>
+        <span class="nav-item__label">Account</span>
+      </button>
+    </nav>
+  </div>
+
+  <script>
+    "use strict";
+
+    const tg = window.Telegram?.WebApp ?? null;
+
+    (function initTelegram() {
+      try {
+        if (tg) {
+          tg.ready();
+          tg.expand();
+          tg.setBackgroundColor("#0a0e17");
+          tg.setHeaderColor("#0a0e17");
+          tg.setBottomBarColor("#0f1520");
+          tg.MainButton.hide();
+        }
+      } catch (err) {
+        console.warn("Telegram WebApp init failed:", err);
+      }
+    })();
+
+    const CONFIG = Object.freeze({
+      API_BASE: "/home_user",
+      TIMEOUT_MS: 12000,
+    });
+
+    const $ = (id) => document.getElementById(id);
+    const $$ = (sel) => document.querySelectorAll(sel);
+    const setText = (el, v) => { if (el) el.textContent = v ?? ""; };
+
+    const formatMoney = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n)
+        ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : "0.00";
+    };
+
+    const formatNumber = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n.toLocaleString("en-US") : "0";
+    };
+
+    const formatTimeAgo = (dateStr) => {
+      const ts = new Date(dateStr).getTime();
+      if (!Number.isFinite(ts)) return "";
+      const diffMs = Date.now() - ts;
+      const mins = Math.floor(diffMs / 60000);
+      if (mins < 1) return "just now";
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      return `${Math.floor(hrs / 24)}d ago`;
+    };
+
+    const StatusBar = {
+      el: {
+        container: $("statusBar"),
+        text: $("statusText"),
+        spinner: $("statusSpinner"),
+        actions: $("statusActions"),
+      },
+      show(mode, msg) {
+        const { container, text, spinner, actions } = this.el;
+        if (!container) return;
+        container.classList.add("is-visible");
+        setText(text, msg);
+        spinner?.classList.toggle("hidden", mode !== "loading");
+        actions?.classList.toggle("hidden", mode !== "error");
+      },
+      hide() {
+        this.el.container?.classList.remove("is-visible");
+      },
+    };
+
+    const ApiClient = {
+      async fetch(endpoint, opts = {}) {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? CONFIG.TIMEOUT_MS);
+
+        const headers = new Headers(opts.headers ?? {});
+        headers.set("Accept", "application/json");
+
+        const fetchOpts = {
+          method: opts.method ?? "GET",
+          credentials: "include",
+          cache: "no-store",
+          signal: ctrl.signal,
+          headers,
+        };
+
+        if (opts.body !== undefined) {
+          headers.set("Content-Type", "application/json");
+          fetchOpts.body = JSON.stringify(opts.body);
+        }
+
+        try {
+          const res = await fetch(`${CONFIG.API_BASE}${endpoint}`, fetchOpts);
+          const ct = res.headers.get("content-type") ?? "";
+          let data = null;
+          if (ct.includes("application/json")) {
+            try { data = await res.json(); } catch { data = null; }
+          }
+          if (!res.ok) {
+            const msg = data?.message || data?.error || "Request failed";
+            return { ok: false, status: res.status, data, error: msg };
+          }
+          return { ok: true, status: res.status, data, error: null };
+        } catch (err) {
+          const isTimeout = err?.name === "AbortError";
+          return { ok: false, status: 0, data: null, error: isTimeout ? "Request timeout" : "Network error" };
+        } finally {
+          clearTimeout(tid);
+        }
+      },
+    };
+
+    const AppState = {
+      user: null,
+      txRange: "1d",
+      txStatus: "done", // "pending" or "done"
+      lbData: null,
+      lbView: "daily",
+      currentTab: "home",
+    };
+
+    const Navigation = {
+      sections: {
+        home: $("sectionHome"),
+        history: $("sectionHistory"),
+        leader: $("sectionLeader"),
+        account: $("sectionAccount"),
+      },
+      init() {
+        $$(".nav-item").forEach((btn) => {
+          btn.addEventListener("click", () => this.switchTo(btn.dataset.tab));
+        });
+      },
+      switchTo(tab) {
+        if (!this.sections[tab]) return;
+        AppState.currentTab = tab;
+        $$(".nav-item").forEach((btn) => btn.classList.toggle("is-active", btn.dataset.tab === tab));
+        Object.entries(this.sections).forEach(([k, sec]) => sec?.classList.toggle("is-active", k === tab));
+        if (tab === "history") TransactionManager.load();
+        else if (tab === "leader") LeaderboardManager.load();
+        else if (tab === "account") AccountManager.load();
+      },
+    };
+
+    const Auth = {
+      async authenticate() {
+        const initData = tg?.initData ?? "";
+        if (!initData) {
+          StatusBar.show("error", "Please open inside Telegram");
+          return false;
+        }
+
+        StatusBar.show("loading", "Connecting…");
+
+        const res = await ApiClient.fetch("/api/user/auth", {
+          method: "POST",
+          body: { initData }
+        });
+
+        if (!res.ok || !res.data?.success || !res.data?.user) {
+          const msg = res.data?.error || res.error || "Authentication failed";
+          StatusBar.show("error", msg);
+          return false;
+        }
+
+        AppState.user = res.data.user;
+        this.updateUI();
+        StatusBar.hide();
+        return true;
+      },
+
+      updateUI() {
+        const u = AppState.user;
+        if (!u) return;
+
+        const name = u.first_name || u.username || "Player";
+        const init = (name[0] || "K").toUpperCase();
+        const bal = formatMoney(u.balance);
+
+        setText($("avatarTop"), init);
+        setText($("nameTop"), name);
+        setText($("balanceTop"), bal);
+        setText($("avatarAcc"), init);
+        setText($("nameAcc"), name);
+        setText($("accBalance"), bal);
+        setText($("accountId"), `ID: #${u.telegramId || "000000"}`);
+      },
+    };
+
+    const TransactionManager = {
+      init() {
+        $("txRangeDay")?.addEventListener("click", () => this.setRange("1d"));
+        $("txRangeWeek")?.addEventListener("click", () => this.setRange("7d"));
+        $("txStatusPending")?.addEventListener("click", () => this.setStatus("pending"));
+        $("txStatusDone")?.addEventListener("click", () => this.setStatus("done"));
+      },
+      setRange(r) {
+        AppState.txRange = r;
+        $("txRangeDay")?.classList.toggle("is-active", r === "1d");
+        $("txRangeWeek")?.classList.toggle("is-active", r === "7d");
+        this.load();
+      },
+      setStatus(s) {
+        AppState.txStatus = s;
+        $("txStatusPending")?.classList.toggle("is-active", s === "pending");
+        $("txStatusDone")?.classList.toggle("is-active", s === "done");
+        this.load();
+      },
+      async load() {
+        const list = $("txList");
+        if (!list) return;
+        this.renderEmpty(list, "Loading transactions…");
+
+        const res = await ApiClient.fetch(
+          `/api/transactions?range=${encodeURIComponent(AppState.txRange)}&status=${encodeURIComponent(AppState.txStatus)}`
+        );
+
+        if (!res.ok) {
+          this.renderEmpty(list, res.error || "Failed to load");
+          return;
+        }
+
+        if (!Array.isArray(res.data) || res.data.length === 0) {
+          const statusLabel = AppState.txStatus === "pending" ? "pending" : "completed";
+          this.renderEmpty(list, `No ${statusLabel} transactions`);
+          return;
+        }
+
+        this.render(list, res.data);
+      },
+      renderEmpty(c, msg) {
+        c.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            ${msg}
+          </div>
+        `;
+      },
+      getStatusBadge(status) {
+        // status can be: "pending", "approved", "rejected"
+        switch (status) {
+          case "approved":
+            return { class: "approved", label: "Done" };
+          case "rejected":
+            return { class: "rejected", label: "Rejected" };
+          case "pending":
+          default:
+            return { class: "pending", label: "Pending" };
+        }
+      },
+      render(c, txs) {
+        c.innerHTML = "";
+        txs.forEach((tx) => {
+          const isDep = tx?.type === "deposit";
+          const statusInfo = this.getStatusBadge(tx?.status);
+          const isRejected = tx?.status === "rejected";
+          const amt = formatMoney(tx?.amount);
+          const time = formatTimeAgo(tx?.time);
+
+          const item = document.createElement("div");
+          item.className = "list-item";
+          item.innerHTML = `
+            <div class="list-item__icon list-item__icon--${isDep ? "deposit" : "withdraw"}">
+              <svg viewBox="0 0 24 24">
+                <line x1="12" y1="${isDep ? "19" : "5"}" x2="12" y2="${isDep ? "5" : "19"}"/>
+                <polyline points="${isDep ? "5 12 12 5 19 12" : "19 12 12 19 5 12"}"/>
+              </svg>
+            </div>
+            <div class="list-item__content">
+              <div class="list-item__title">${isDep ? "Deposit" : "Withdrawal"}</div>
+              <div class="list-item__subtitle">${time}</div>
+            </div>
+            <span class="list-item__badge list-item__badge--${statusInfo.class}">
+              ${statusInfo.label}
+            </span>
+            <div class="list-item__amount ${isRejected ? 'list-item__amount--rejected' : `list-item__amount--${isDep ? "deposit" : "withdraw"}`}">
+              ${isDep ? "+" : "−"}${amt}<span class="list-item__amount-currency">ብር</span>
+            </div>
+          `;
+          c.appendChild(item);
+        });
+      },
+    };
+
+    const LeaderboardManager = {
+      init() {
+        $("lbToggleDaily")?.addEventListener("click", () => this.setView("daily"));
+        $("lbToggleWeekly")?.addEventListener("click", () => this.setView("weekly"));
+      },
+      setView(view) {
+        AppState.lbView = view;
+        
+        $("lbToggleDaily")?.classList.toggle("is-active", view === "daily");
+        $("lbToggleWeekly")?.classList.toggle("is-active", view === "weekly");
+        
+        $("dailyWinnersPanel")?.classList.toggle("hidden", view !== "daily");
+        $("weeklyWinnersPanel")?.classList.toggle("hidden", view !== "weekly");
+      },
+      async load() {
+        const dailyList = $("dailyWinnersList");
+        const weeklyList = $("weeklyWinnersList");
+
+        if (dailyList) this.renderLoading(dailyList);
+        if (weeklyList) this.renderLoading(weeklyList);
+
+        const res = await ApiClient.fetch("/api/kano/leaderboard-data");
+
+        if (!res.ok) {
+          if (dailyList) this.renderEmpty(dailyList, res.error || "Failed to load");
+          if (weeklyList) this.renderEmpty(weeklyList, res.error || "Failed to load");
+          return;
+        }
+
+        AppState.lbData = res.data ?? null;
+        this.updateStats();
+        this.renderWinners();
+      },
+      updateStats() {
+        const my = AppState.lbData?.my ?? {};
+        const week = my.week ?? {};
+        setText($("accGamesWeek"), week.games ?? 0);
+      },
+      renderLoading(c) {
+        c.innerHTML = `<div class="empty-state">Loading…</div>`;
+      },
+      renderEmpty(c, msg) {
+        c.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">
+              <svg viewBox="0 0 24 24">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+              </svg>
+            </div>
+            ${msg}
+          </div>
+        `;
+      },
+      renderWinners() {
+        const dailyList = $("dailyWinnersList");
+        const weeklyList = $("weeklyWinnersList");
+
+        const dailyPlayers = AppState.lbData?.daily ?? [];
+        const weeklyPlayers = AppState.lbData?.weekly ?? [];
+
+        if (dailyList) {
+          if (dailyPlayers.length === 0) {
+            this.renderEmpty(dailyList, "No winners today yet");
+          } else {
+            this.renderWinnerList(dailyList, dailyPlayers);
+          }
+        }
+
+        if (weeklyList) {
+          if (weeklyPlayers.length === 0) {
+            this.renderEmpty(weeklyList, "No winners this week yet");
+          } else {
+            this.renderWinnerList(weeklyList, weeklyPlayers);
+          }
+        }
+      },
+      getRankIcon(rank) {
+        switch (rank) {
+          case 1: return "👑";
+          case 2: return "🥇";
+          case 3: return "🥈";
+          default: return rank;
+        }
+      },
+      renderWinnerList(container, players) {
+        container.innerHTML = "";
+        players.forEach((p, i) => {
+          const rank = i + 1;
+          const rankClass = rank <= 3 ? `winner-item--${rank === 1 ? '1st' : rank === 2 ? '2nd' : '3rd'}` : '';
+          const rankIcon = this.getRankIcon(rank);
+          
+          const item = document.createElement("div");
+          item.className = `winner-item ${rankClass}`;
+          item.innerHTML = `
+            <div class="winner-item__rank winner-item__rank--${rank}">
+              <span class="winner-item__rank-icon">${rankIcon}</span>
+            </div>
+            <div class="winner-item__info">
+              <div class="winner-item__name">
+                ${p.username || "Player"}
+                ${rank === 1 ? '<span class="winner-item__crown">✨</span>' : ''}
+              </div>
+              <div class="winner-item__games">
+                <svg viewBox="0 0 24 24">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                ${formatNumber(p.games)} games played
+              </div>
+            </div>
+            <div class="winner-item__payout">
+              <div class="winner-item__payout-amount">+${formatNumber(p.payout)}</div>
+              <div class="winner-item__payout-label">ብር Won</div>
+            </div>
+          `;
+          container.appendChild(item);
+        });
+      },
+    };
+
+    const AccountManager = {
+      init() {
+        $("logoutBtn")?.addEventListener("click", () => this.logout());
+      },
+      async load() {
+        const res = await ApiClient.fetch("/api/account/overview");
+        if (res.ok) {
+          setText($("accGamesWeek"), res.data?.weekGames ?? 0);
+        }
+      },
+      async logout() {
+        await ApiClient.fetch("/api/user/logout", { method: "POST" });
+        window.location.href = `${CONFIG.API_BASE}/`;
+      },
+    };
+
+    // Play button - navigate to game
+    $("playBtn")?.addEventListener("click", () => {
+      window.location.href = "/kano";
+    });
+
+    // Retry button for auth errors
+    $("retryBtn")?.addEventListener("click", async () => {
+      await Auth.authenticate();
+    });
+
+    // Initialize app
+    (function init() {
+      Navigation.init();
+      TransactionManager.init();
+      LeaderboardManager.init();
+      AccountManager.init();
+
+      (async () => {
+        await Auth.authenticate();
+      })();
+    })();
+  </script>
+</body>
+</html>
