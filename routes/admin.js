@@ -13,8 +13,6 @@ const Withdraw = require("../models/withdraw");
 const { requireTelegramInitData } = require("../utils/telegramWebApp");
 const { requireAdminSession } = require("../middleware/requireSession");
 
-router.use(express.json({ limit: "256kb" }));
-
 /* ═══════════════════════════════════════════
    Helpers
 ═══════════════════════════════════════════ */
@@ -67,14 +65,20 @@ function buildName(firstName, fatherName) {
 }
 
 function normalizeTelebirrAccountObj(obj) {
-  const rawPhone = typeof obj === "string" ? obj : (obj && (obj.PhoneNumber || obj.phone)) || "";
+  const rawPhone = typeof obj === "string" ? obj : (obj && (obj.phoneNumber || obj.phone)) || "";
   const phone = normalizeMsisdn(rawPhone);
 
-  const firstName = String(obj?.FirstName || obj?.firstName || "").trim();
-  const fatherName = String(obj?.FatherName || obj?.fatherName || "").trim();
+  const firstName = String(obj?.firstName || "").trim();
+  const fatherName = String(obj?.fatherName || "").trim();
   const name = buildName(firstName, fatherName);
 
-  return { PhoneNumber: phone, FirstName: firstName, FatherName: fatherName, phone, name };
+  return { 
+    phoneNumber: phone,
+    firstName: firstName,
+    fatherName: fatherName,
+    phone, 
+    name 
+  };
 }
 
 function normalizeActiveTelebirrField(active) {
@@ -83,13 +87,13 @@ function normalizeActiveTelebirrField(active) {
   if (typeof active === "string") {
     const p = normalizeMsisdn(active);
     if (!p) return null;
-    return { PhoneNumber: p, FirstName: "", FatherName: "" };
+    return { phoneNumber: p, firstName: "", fatherName: "" };
   }
 
   if (typeof active === "object") {
     const x = normalizeTelebirrAccountObj(active);
     if (!x.phone) return null;
-    return { PhoneNumber: x.phone, FirstName: x.FirstName, FatherName: x.FatherName };
+    return { phoneNumber: x.phone, firstName: x.firstName, fatherName: x.fatherName };
   }
 
   return null;
@@ -109,14 +113,14 @@ function upsertTelebirrAccount(list, phone, firstName, fatherName) {
     if (!x.phone) continue;
 
     if (x.phone === p) {
-      next.push({ PhoneNumber: p, FirstName: fn, FatherName: fatn });
+      next.push({ phoneNumber: p, firstName: fn, fatherName: fatn });
       found = true;
     } else {
-      next.push({ PhoneNumber: x.phone, FirstName: x.FirstName, FatherName: x.FatherName });
+      next.push({ phoneNumber: x.phone, firstName: x.firstName, fatherName: x.fatherName });
     }
   }
 
-  if (!found) next.push({ PhoneNumber: p, FirstName: fn, FatherName: fatn });
+  if (!found) next.push({ phoneNumber: p, firstName: fn, fatherName: fatn });
   return next;
 }
 
@@ -125,7 +129,7 @@ function removeTelebirrAccount(list, phone) {
   return (list || [])
     .map(normalizeTelebirrAccountObj)
     .filter((x) => x.phone && x.phone !== p)
-    .map((x) => ({ PhoneNumber: x.phone, FirstName: x.FirstName, FatherName: x.FatherName }));
+    .map((x) => ({ phoneNumber: x.phone, firstName: x.firstName, fatherName: x.fatherName }));
 }
 
 function normalizeRegistryList(list) {
@@ -157,7 +161,7 @@ function registryRemovePhone(list, phone) {
 async function getAdminLeanBySession(req) {
   const telegramId = req.session?.admin?.telegramId;
   if (!telegramId) return null;
-  return Admin.findOne({ TelegramId: String(telegramId) }).lean();
+  return Admin.findOne({ telegramId: String(telegramId) }).lean();
 }
 
 /* ═══════════════════════════════════════════
@@ -177,13 +181,13 @@ router.post("/api/auth", requireTelegramInitData("TELEGRAM_BOT_TOKEN_ADMIN"), as
     const tgUser = req.tgUser;
     const telegramId = String(tgUser.id);
 
-    const admin = await Admin.findOne({ TelegramId: telegramId }).lean();
+    const admin = await Admin.findOne({ telegramId: telegramId }).lean();
     if (!admin) return res.status(403).json({ ok: false, error: "NOT_ADMIN" });
 
     req.session.admin = {
       telegramId,
-      role: String(admin.Role || "Admin"),
-      username: admin.Username || tgUser.username || "",
+      role: String(admin.role || "admin"),
+      username: admin.username || tgUser.username || "",
     };
 
     return res.json({ ok: true, admin: { Username: req.session.admin.username } });
@@ -207,35 +211,35 @@ router.get("/api/settings", requireAdminSession, async (req, res) => {
     const admin = await getAdminLeanBySession(req);
     if (!admin) return res.status(404).json({ ok: false, error: "ADMIN_NOT_FOUND" });
 
-    const teleList = (admin.TelebirrAccountLists || [])
+    const teleList = (admin.telebirrAccountLists || [])
       .map(normalizeTelebirrAccountObj)
       .filter((x) => x.phone);
 
-    const activeFixed = normalizeActiveTelebirrField(admin.ActiveTelebirrAccount);
+    const activeFixed = normalizeActiveTelebirrField(admin.activeTelebirrAccount);
     const activeObj = activeFixed ? normalizeTelebirrAccountObj(activeFixed) : null;
 
     const registryPhones = normalizeRegistryList(admin.registry || []);
 
     return res.json({
       ok: true,
-      admin: { Username: admin.Username || "" },
-      maxUserLimit: Number(admin.MaxUserLimit ?? 1000),
+      admin: { Username: admin.username || "" },
+      maxUserLimit: Number(admin.maxUserLimit ?? 1000),
       kanoRtp: Number(admin.rtp ?? 50),
       activeTelebirr:
         activeObj && activeObj.phone
           ? {
               phone: activeObj.phone,
               name: activeObj.name || activeObj.phone,
-              firstName: activeObj.FirstName,
-              fatherName: activeObj.FatherName,
+              firstName: activeObj.firstName,
+              fatherName: activeObj.fatherName,
             }
           : null,
       registry: registryPhones.map((phone) => ({ phone })),
       telebirrAccounts: teleList.map((x) => ({
         phone: x.phone,
         name: x.name,
-        firstName: x.FirstName,
-        fatherName: x.FatherName,
+        firstName: x.firstName,
+        fatherName: x.fatherName,
       })),
     });
   } catch (err) {
@@ -252,7 +256,7 @@ router.post("/api/maxuserlimit", requireAdminSession, async (req, res) => {
     const admin = await getAdminLeanBySession(req);
     if (!admin) return res.status(404).json({ ok: false, error: "ADMIN_NOT_FOUND" });
 
-    await Admin.updateOne({ TelegramId: admin.TelegramId }, { $set: { MaxUserLimit: n } });
+    await Admin.updateOne({ telegramId: admin.telegramId }, { $set: { maxUserLimit: n } });
     return res.json({ ok: true, maxUserLimit: n });
   } catch (err) {
     console.error("[MAXUSERLIMIT_SET] error:", err);
@@ -270,7 +274,7 @@ router.post("/api/kano/rtp", requireAdminSession, async (req, res) => {
     const admin = await getAdminLeanBySession(req);
     if (!admin) return res.status(404).json({ ok: false, error: "ADMIN_NOT_FOUND" });
 
-    await Admin.updateOne({ TelegramId: admin.TelegramId }, { $set: { rtp: rtpNum } });
+    await Admin.updateOne({ telegramId: admin.telegramId }, { $set: { rtp: rtpNum } });
     return res.json({ ok: true, kanoRtp: rtpNum });
   } catch (err) {
     console.error("[ADMIN_SET_RTP] error:", err);
@@ -287,11 +291,11 @@ router.post("/api/registry/add", requireAdminSession, async (req, res) => {
     if (!admin) return res.status(404).json({ ok: false, error: "ADMIN_NOT_FOUND" });
 
     const nextRegistry = registryUpsertPhone(admin.registry || [], p);
-    const activeFixed = normalizeActiveTelebirrField(admin.ActiveTelebirrAccount);
+    const activeFixed = normalizeActiveTelebirrField(admin.activeTelebirrAccount);
 
     await Admin.updateOne(
-      { TelegramId: admin.TelegramId },
-      { $set: { registry: nextRegistry, ActiveTelebirrAccount: activeFixed } }
+      { telegramId: admin.telegramId },
+      { $set: { registry: nextRegistry, activeTelebirrAccount: activeFixed } }
     );
 
     return res.json({ ok: true });
@@ -310,11 +314,11 @@ router.post("/api/registry/remove", requireAdminSession, async (req, res) => {
     if (!admin) return res.status(404).json({ ok: false, error: "ADMIN_NOT_FOUND" });
 
     const nextRegistry = registryRemovePhone(admin.registry || [], p);
-    const activeFixed = normalizeActiveTelebirrField(admin.ActiveTelebirrAccount);
+    const activeFixed = normalizeActiveTelebirrField(admin.activeTelebirrAccount);
 
     await Admin.updateOne(
-      { TelegramId: admin.TelegramId },
-      { $set: { registry: nextRegistry, ActiveTelebirrAccount: activeFixed } }
+      { telegramId: admin.telegramId },
+      { $set: { registry: nextRegistry, activeTelebirrAccount: activeFixed } }
     );
 
     await SubAdmin.deleteMany({ phoneNumber: p });
@@ -336,12 +340,12 @@ router.post("/api/telebirr/add", requireAdminSession, async (req, res) => {
     const admin = await getAdminLeanBySession(req);
     if (!admin) return res.status(404).json({ ok: false, error: "ADMIN_NOT_FOUND" });
 
-    const nextList = upsertTelebirrAccount(admin.TelebirrAccountLists || [], p, fn, fatn);
-    const activeFixed = normalizeActiveTelebirrField(admin.ActiveTelebirrAccount);
+    const nextList = upsertTelebirrAccount(admin.telebirrAccountLists || [], p, fn, fatn);
+    const activeFixed = normalizeActiveTelebirrField(admin.activeTelebirrAccount);
 
     await Admin.updateOne(
-      { TelegramId: admin.TelegramId },
-      { $set: { TelebirrAccountLists: nextList, ActiveTelebirrAccount: activeFixed } }
+      { telegramId: admin.telegramId },
+      { $set: { telebirrAccountLists: nextList, activeTelebirrAccount: activeFixed } }
     );
 
     return res.json({ ok: true });
@@ -359,15 +363,15 @@ router.post("/api/telebirr/remove", requireAdminSession, async (req, res) => {
     const admin = await getAdminLeanBySession(req);
     if (!admin) return res.status(404).json({ ok: false, error: "ADMIN_NOT_FOUND" });
 
-    const nextList = removeTelebirrAccount(admin.TelebirrAccountLists || [], p);
+    const nextList = removeTelebirrAccount(admin.telebirrAccountLists || [], p);
 
-    const activeFixed = normalizeActiveTelebirrField(admin.ActiveTelebirrAccount);
-    const activePhone = activeFixed ? normalizeMsisdn(activeFixed.PhoneNumber) : "";
+    const activeFixed = normalizeActiveTelebirrField(admin.activeTelebirrAccount);
+    const activePhone = activeFixed ? normalizeMsisdn(activeFixed.phoneNumber) : "";
     const nextActive = activePhone === p ? null : activeFixed;
 
     await Admin.updateOne(
-      { TelegramId: admin.TelegramId },
-      { $set: { TelebirrAccountLists: nextList, ActiveTelebirrAccount: nextActive } }
+      { telegramId: admin.telegramId },
+      { $set: { telebirrAccountLists: nextList, activeTelebirrAccount: nextActive } }
     );
 
     return res.json({ ok: true });
@@ -385,21 +389,21 @@ router.post("/api/telebirr/setActive", requireAdminSession, async (req, res) => 
     const admin = await getAdminLeanBySession(req);
     if (!admin) return res.status(404).json({ ok: false, error: "ADMIN_NOT_FOUND" });
 
-    const list = (admin.TelebirrAccountLists || []).map(normalizeTelebirrAccountObj);
+    const list = (admin.telebirrAccountLists || []).map(normalizeTelebirrAccountObj);
     const found = list.find((x) => x.phone === p);
     if (!found) return res.status(400).json({ ok: false, error: "NOT_IN_LIST" });
 
-    const nextActive = { PhoneNumber: found.phone, FirstName: found.FirstName, FatherName: found.FatherName };
+    const nextActive = { phoneNumber: found.phone, firstName: found.firstName, fatherName: found.fatherName };
 
-    await Admin.updateOne({ TelegramId: admin.TelegramId }, { $set: { ActiveTelebirrAccount: nextActive } });
+    await Admin.updateOne({ telegramId: admin.telegramId }, { $set: { activeTelebirrAccount: nextActive } });
 
     return res.json({
       ok: true,
       activeTelebirr: {
         phone: found.phone,
         name: found.name,
-        firstName: found.FirstName,
-        fatherName: found.FatherName,
+        firstName: found.firstName,
+        fatherName: found.fatherName,
       },
     });
   } catch (err) {
