@@ -64,19 +64,6 @@ async function sendTelegramMessage(chatId, text) {
   }
 }
 
-/**
- * Create success response
- */
-const successResponse = (data) => ({ ok: true, ...data });
-
-/**
- * Create error response
- */
-const errorResponse = (error, statusCode = 400) => ({
-  response: { ok: false, error },
-  statusCode,
-});
-
 /* ═══════════════════════════════════════════════════════════════
    📄 SERVE HTML PAGE
 ═══════════════════════════════════════════════════════════════ */
@@ -94,15 +81,20 @@ router.post(
   requireTelegramInitData("TELEGRAM_BOT_TOKEN_SUBADMIN"),
   async (req, res) => {
     try {
-      const telegramId = String(req.tgUser.id);
+      const telegramId = String(req.tgUser?.id || "");
+      
+      if (!telegramId) {
+        return res.status(400).json({ ok: false, error: "INVALID_TELEGRAM_ID" });
+      }
+
       const subadmin = await SubAdmin.findOne({ telegramId }).lean();
 
       if (!subadmin) {
-        return res.status(403).json(errorResponse("NOT_SUBADMIN", 403).response);
+        return res.status(403).json({ ok: false, error: "NOT_SUBADMIN" });
       }
 
-      if (subadmin.status?.toLowerCase() === "blocked") {
-        return res.status(403).json(errorResponse("BLOCKED", 403).response);
+      if (String(subadmin.status || "").toLowerCase() === "blocked") {
+        return res.status(403).json({ ok: false, error: "BLOCKED" });
       }
 
       // Set session
@@ -113,19 +105,18 @@ router.post(
         username: subadmin.username || req.tgUser.username || "",
       };
 
-      return res.json(
-        successResponse({
-          subadmin: {
-            id: String(subadmin._id),
-            username: subadmin.username || req.tgUser.first_name || "",
-            status: subadmin.status || "active",
-            balance: roundBalance(subadmin.balance || 0),
-          },
-        })
-      );
+      return res.json({
+        ok: true,
+        subadmin: {
+          id: String(subadmin._id),
+          username: subadmin.username || req.tgUser.first_name || req.tgUser.username || "SubAdmin",
+          status: subadmin.status || "active",
+          balance: roundBalance(subadmin.balance || 0),
+        },
+      });
     } catch (err) {
       console.error("[AUTH] Error:", err);
-      return res.status(500).json(errorResponse("AUTH_FAIL", 500).response);
+      return res.status(500).json({ ok: false, error: "AUTH_FAIL" });
     }
   }
 );
@@ -140,7 +131,7 @@ router.post("/api/toggle-status", requireSubadminSession, async (req, res) => {
     const subadmin = await SubAdmin.findById(subadminId).select("status").lean();
 
     if (!subadmin) {
-      return res.status(404).json(errorResponse("NOT_FOUND", 404).response);
+      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
     }
 
     const currentStatus = String(subadmin.status || "active").toLowerCase();
@@ -148,10 +139,10 @@ router.post("/api/toggle-status", requireSubadminSession, async (req, res) => {
 
     await SubAdmin.findByIdAndUpdate(subadminId, { $set: { status: newStatus } });
 
-    return res.json(successResponse({ status: newStatus }));
+    return res.json({ ok: true, status: newStatus });
   } catch (err) {
     console.error("[TOGGLE_STATUS] Error:", err);
-    return res.status(500).json(errorResponse("TOGGLE_FAIL", 500).response);
+    return res.status(500).json({ ok: false, error: "TOGGLE_FAIL" });
   }
 });
 
@@ -175,17 +166,16 @@ router.get("/api/stats", requireSubadminSession, async (req, res) => {
       SubAdmin.findById(subadminId).select("balance status").lean(),
     ]);
 
-    return res.json(
-      successResponse({
-        deposits: depositStats[0] || { count: 0, total: 0 },
-        withdraws: withdrawStats[0] || { count: 0, total: 0 },
-        balance: roundBalance(subadmin?.balance || 0),
-        status: subadmin?.status || "active",
-      })
-    );
+    return res.json({
+      ok: true,
+      deposits: depositStats[0] || { count: 0, total: 0 },
+      withdraws: withdrawStats[0] || { count: 0, total: 0 },
+      balance: roundBalance(subadmin?.balance || 0),
+      status: subadmin?.status || "active",
+    });
   } catch (err) {
     console.error("[STATS] Error:", err);
-    return res.status(500).json(errorResponse("STATS_FAIL", 500).response);
+    return res.status(500).json({ ok: false, error: "STATS_FAIL" });
   }
 });
 
@@ -198,15 +188,14 @@ router.get("/api/balance", requireSubadminSession, async (req, res) => {
     const subadminId = req.session.subadmin.id;
     const subadmin = await SubAdmin.findById(subadminId).select("balance status").lean();
 
-    return res.json(
-      successResponse({
-        balance: roundBalance(subadmin?.balance || 0),
-        status: subadmin?.status || "active",
-      })
-    );
+    return res.json({
+      ok: true,
+      balance: roundBalance(subadmin?.balance || 0),
+      status: subadmin?.status || "active",
+    });
   } catch (err) {
     console.error("[BALANCE] Error:", err);
-    return res.status(500).json(errorResponse("BALANCE_FAIL", 500).response);
+    return res.status(500).json({ ok: false, error: "BALANCE_FAIL" });
   }
 });
 
@@ -232,24 +221,23 @@ router.get("/api/deposits", requireSubadminSession, async (req, res) => {
     const lastItem = deposits[deposits.length - 1];
     const totalCount = await Deposit.countDocuments({ status: "pending" });
 
-    return res.json(
-      successResponse({
-        items: deposits.map((d) => ({
-          id: String(d._id),
-          telegramId: d.telegramId,
-          chatId: d.chatId,
-          senderPhone: d.senderPhone || "",
-          amount: d.amount || 0,
-          createdAt: d.createdAt,
-        })),
-        hasMore: deposits.length === limitNum,
-        nextCursor: lastItem ? String(lastItem._id) : null,
-        totalCount,
-      })
-    );
+    return res.json({
+      ok: true,
+      items: deposits.map((d) => ({
+        id: String(d._id),
+        telegramId: String(d.telegramId || ""),
+        chatId: String(d.chatId || ""),
+        senderPhone: String(d.senderPhone || ""),
+        amount: Number(d.amount || 0),
+        createdAt: d.createdAt || new Date(),
+      })),
+      hasMore: deposits.length === limitNum,
+      nextCursor: lastItem ? String(lastItem._id) : null,
+      totalCount: totalCount || 0,
+    });
   } catch (err) {
     console.error("[DEPOSITS_FETCH] Error:", err);
-    return res.status(500).json(errorResponse("FETCH_FAIL", 500).response);
+    return res.status(500).json({ ok: false, error: "FETCH_FAIL" });
   }
 });
 
@@ -275,25 +263,24 @@ router.get("/api/withdraws", requireSubadminSession, async (req, res) => {
     const lastItem = withdraws[withdraws.length - 1];
     const totalCount = await Withdraw.countDocuments({ status: "pending" });
 
-    return res.json(
-      successResponse({
-        items: withdraws.map((w) => ({
-          id: String(w._id),
-          telegramId: w.telegramId,
-          chatId: w.chatId,
-          receiverPhone: w.receiverPhone || "",
-          receiverFirstName: w.receiverFirstName || "",
-          amount: w.amount || 0,
-          createdAt: w.createdAt,
-        })),
-        hasMore: withdraws.length === limitNum,
-        nextCursor: lastItem ? String(lastItem._id) : null,
-        totalCount,
-      })
-    );
+    return res.json({
+      ok: true,
+      items: withdraws.map((w) => ({
+        id: String(w._id),
+        telegramId: String(w.telegramId || ""),
+        chatId: String(w.chatId || ""),
+        receiverPhone: String(w.receiverPhone || ""),
+        receiverFirstName: String(w.receiverFirstName || ""),
+        amount: Number(w.amount || 0),
+        createdAt: w.createdAt || new Date(),
+      })),
+      hasMore: withdraws.length === limitNum,
+      nextCursor: lastItem ? String(lastItem._id) : null,
+      totalCount: totalCount || 0,
+    });
   } catch (err) {
     console.error("[WITHDRAWS_FETCH] Error:", err);
-    return res.status(500).json(errorResponse("FETCH_FAIL", 500).response);
+    return res.status(500).json({ ok: false, error: "FETCH_FAIL" });
   }
 });
 
@@ -309,12 +296,12 @@ router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res
     const subadminId = req.session.subadmin.id;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json(errorResponse("INVALID_ID").response);
+      return res.status(400).json({ ok: false, error: "INVALID_ID" });
     }
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
-      return res.status(403).json(errorResponse("SLEEP_MODE", 403).response);
+      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
     }
 
     let result = null;
@@ -361,15 +348,14 @@ router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res
       );
     }
 
-    return res.json(
-      successResponse({
-        id,
-        newBalance: roundBalance(result.subadmin.balance),
-      })
-    );
+    return res.json({
+      ok: true,
+      id,
+      newBalance: roundBalance(result.subadmin.balance),
+    });
   } catch (err) {
     console.error("[APPROVE_DEPOSIT] Error:", err);
-    return res.status(400).json(errorResponse(err.message || "APPROVE_FAIL").response);
+    return res.status(400).json({ ok: false, error: err.message || "APPROVE_FAIL" });
   } finally {
     session.endSession();
   }
@@ -387,17 +373,17 @@ router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, re
     const subadminId = req.session.subadmin.id;
 
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json(errorResponse("INVALID_IDS").response);
+      return res.status(400).json({ ok: false, error: "INVALID_IDS" });
     }
 
     const validIds = ids.filter(isValidObjectId);
     if (validIds.length === 0) {
-      return res.status(400).json(errorResponse("NO_VALID_IDS").response);
+      return res.status(400).json({ ok: false, error: "NO_VALID_IDS" });
     }
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
-      return res.status(403).json(errorResponse("SLEEP_MODE", 403).response);
+      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
     }
 
     let result = { approved: 0, failed: 0, totalAmount: 0, newBalance: 0 };
@@ -459,10 +445,10 @@ router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, re
       result.newBalance = roundBalance(subadmin.balance);
     });
 
-    return res.json(successResponse(result));
+    return res.json({ ok: true, ...result });
   } catch (err) {
     console.error("[BULK_APPROVE_DEPOSITS] Error:", err);
-    return res.status(400).json(errorResponse(err.message || "BULK_APPROVE_FAIL").response);
+    return res.status(400).json({ ok: false, error: err.message || "BULK_APPROVE_FAIL" });
   } finally {
     session.endSession();
   }
@@ -479,12 +465,12 @@ router.post("/api/deposits/:id/reject", requireSubadminSession, async (req, res)
     const subadminId = req.session.subadmin.id;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json(errorResponse("INVALID_ID").response);
+      return res.status(400).json({ ok: false, error: "INVALID_ID" });
     }
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
-      return res.status(403).json(errorResponse("SLEEP_MODE", 403).response);
+      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
     }
 
     const deposit = await Deposit.findOneAndUpdate(
@@ -501,7 +487,7 @@ router.post("/api/deposits/:id/reject", requireSubadminSession, async (req, res)
     );
 
     if (!deposit) {
-      return res.status(404).json(errorResponse("NOT_FOUND", 404).response);
+      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
     }
 
     // Send notification
@@ -512,10 +498,10 @@ router.post("/api/deposits/:id/reject", requireSubadminSession, async (req, res)
       );
     }
 
-    return res.json(successResponse({ id }));
+    return res.json({ ok: true, id });
   } catch (err) {
     console.error("[REJECT_DEPOSIT] Error:", err);
-    return res.status(500).json(errorResponse("REJECT_FAIL", 500).response);
+    return res.status(500).json({ ok: false, error: "REJECT_FAIL" });
   }
 });
 
@@ -531,12 +517,12 @@ router.post("/api/withdraws/:id/approve", requireSubadminSession, async (req, re
     const subadminId = req.session.subadmin.id;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json(errorResponse("INVALID_ID").response);
+      return res.status(400).json({ ok: false, error: "INVALID_ID" });
     }
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
-      return res.status(403).json(errorResponse("SLEEP_MODE", 403).response);
+      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
     }
 
     let result = null;
@@ -570,15 +556,14 @@ router.post("/api/withdraws/:id/approve", requireSubadminSession, async (req, re
       );
     }
 
-    return res.json(
-      successResponse({
-        id,
-        newBalance: roundBalance(result.subadmin.balance),
-      })
-    );
+    return res.json({
+      ok: true,
+      id,
+      newBalance: roundBalance(result.subadmin.balance),
+    });
   } catch (err) {
     console.error("[APPROVE_WITHDRAW] Error:", err);
-    return res.status(400).json(errorResponse(err.message || "APPROVE_FAIL").response);
+    return res.status(400).json({ ok: false, error: err.message || "APPROVE_FAIL" });
   } finally {
     session.endSession();
   }
@@ -596,17 +581,17 @@ router.post("/api/withdraws/bulk-approve", requireSubadminSession, async (req, r
     const subadminId = req.session.subadmin.id;
 
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json(errorResponse("INVALID_IDS").response);
+      return res.status(400).json({ ok: false, error: "INVALID_IDS" });
     }
 
     const validIds = ids.filter(isValidObjectId);
     if (validIds.length === 0) {
-      return res.status(400).json(errorResponse("NO_VALID_IDS").response);
+      return res.status(400).json({ ok: false, error: "NO_VALID_IDS" });
     }
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
-      return res.status(403).json(errorResponse("SLEEP_MODE", 403).response);
+      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
     }
 
     let result = { approved: 0, failed: 0, totalAmount: 0, newBalance: 0 };
@@ -654,10 +639,10 @@ router.post("/api/withdraws/bulk-approve", requireSubadminSession, async (req, r
       result.newBalance = roundBalance(subadmin.balance);
     });
 
-    return res.json(successResponse(result));
+    return res.json({ ok: true, ...result });
   } catch (err) {
     console.error("[BULK_APPROVE_WITHDRAWS] Error:", err);
-    return res.status(400).json(errorResponse(err.message || "BULK_APPROVE_FAIL").response);
+    return res.status(400).json({ ok: false, error: err.message || "BULK_APPROVE_FAIL" });
   } finally {
     session.endSession();
   }
@@ -676,12 +661,12 @@ router.post("/api/withdraws/:id/reject", requireSubadminSession, async (req, res
     const subadminId = req.session.subadmin.id;
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json(errorResponse("INVALID_ID").response);
+      return res.status(400).json({ ok: false, error: "INVALID_ID" });
     }
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
-      return res.status(403).json(errorResponse("SLEEP_MODE", 403).response);
+      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
     }
 
     let result = null;
@@ -719,10 +704,10 @@ router.post("/api/withdraws/:id/reject", requireSubadminSession, async (req, res
       );
     }
 
-    return res.json(successResponse({ id }));
+    return res.json({ ok: true, id });
   } catch (err) {
     console.error("[REJECT_WITHDRAW] Error:", err);
-    return res.status(400).json(errorResponse(err.message || "REJECT_FAIL").response);
+    return res.status(400).json({ ok: false, error: err.message || "REJECT_FAIL" });
   } finally {
     session.endSession();
   }
