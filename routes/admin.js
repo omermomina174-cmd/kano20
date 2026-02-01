@@ -469,32 +469,37 @@ router.post("/api/subadmins/adjust-balance", requireAdminSession, async (req, re
     const { subadminId, amount } = req.body || {};
     if (!subadminId) return res.status(400).json({ ok: false, error: "BAD_INPUT" });
 
-    const adjustAmount = Number(amount);
+    // accept "1000", "-500", "1,000" etc.
+    const cleaned = String(amount ?? "").replace(/[,\s]/g, "").trim();
+    const adjustAmount = roundBalance(Number(cleaned));
+
     if (!Number.isFinite(adjustAmount) || adjustAmount === 0) {
       return res.status(400).json({ ok: false, error: "INVALID_AMOUNT" });
     }
 
-    const s = await SubAdmin.findById(subadminId);
-    if (!s) return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
+    // get previous balance for response
+    const before = await SubAdmin.findById(subadminId).select("balance status").lean();
+    if (!before) return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
 
-    const previousBalance = roundBalance(s.balance || 0);
-    const newBalance = roundBalance(previousBalance + adjustAmount);
+    const previousBalance = roundBalance(before.balance || 0);
 
-    if (newBalance < 0) {
-      return res.status(400).json({ ok: false, error: "INSUFFICIENT_BALANCE" });
-    }
+    // ✅ atomic add/subtract (allows negative result)
+    const updated = await SubAdmin.findByIdAndUpdate(
+      subadminId,
+      { $inc: { balance: adjustAmount } },
+      { new: true }
+    ).select("balance status");
 
-    s.balance = newBalance;
-    await s.save();
+    if (!updated) return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
 
     return res.json({
       ok: true,
       subadmin: {
-        _id: s._id,
-        status: s.status,
-        balance: newBalance,
+        _id: updated._id,
+        status: updated.status,
         previousBalance,
         adjustment: adjustAmount,
+        balance: roundBalance(updated.balance || 0),
       },
     });
   } catch (err) {
