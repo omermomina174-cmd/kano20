@@ -58,43 +58,35 @@ let io = null;
 let isInitialized = false;
 let isShuttingDown = false;
 
-// Game state
 let gamePhase = "betting";
 let countdown = GAME_CONFIG.BETTING_DURATION_SEC;
 let gameInterval = null;
 let isDrawing = false;
 
-// Round state
 let winningNumbers = [];
 let currentDrawIndex = 0;
 let currentGameId = null;
 let currentRoundTickets = new Map();
 let userRoundBetMinor = new Map();
 
-// Draw state
 let activeDrawBatch = null;
 let activeDrawFinished = null;
 let roundUserResult = new Map();
 
-// Timers
 let finishTimer = null;
 let newRoundTimer = null;
 
-// Admin cache (RTP only)
 let cachedRtp = 70;
 let rtpCacheTime = 0;
 
-// Runtime state
 let runtimeUsers = new Map();
 let socketToTelegram = new Map();
 
-// Rate limiting
 let userRateLimit = new Map();
 
-// Locks for race condition prevention
 const userLock = new AsyncLock({ timeout: 5000 });
 
-// ========== SIMPLE LOGGING HELPERS ==========
+// ========== LOGGING HELPERS ==========
 function formatMoney(minor) {
   return (minor / 100).toFixed(2);
 }
@@ -399,10 +391,10 @@ function emitBalanceToUser(telegramId) {
   const ru = runtimeUsers.get(telegramId);
   if (!ru) return;
 
-  const Balance = fromMinor(ru.balanceMinor);
+  const balance = fromMinor(ru.balanceMinor);
   for (const sid of ru.sockets) {
     const s = io.sockets.sockets.get(sid);
-    if (s) s.emit("balanceUpdate", Balance);
+    if (s) s.emit("balanceUpdate", balance);
   }
 }
 
@@ -475,7 +467,6 @@ async function saveRoundToDb({
     targetRtp: optimalDrawInfo?.targetRtpPercent ?? 70
   });
 
-  // 1) Save Draw History
   try {
     await KanoDrawHistory.findOneAndUpdate(
       { drawIndex },
@@ -505,11 +496,9 @@ async function saveRoundToDb({
     console.error("[DB] Draw history save failed:", err.message);
   }
 
-  // 2) Cleanup old ticket history
   const telegramIds = Array.from(currentRoundTickets.keys());
   await cleanupOldTicketHistory(telegramIds);
 
-  // 3) Bulk save Ticket History
   const ticketDocs = [];
 
   for (const [telegramId, tickets] of currentRoundTickets) {
@@ -555,7 +544,6 @@ async function saveRoundToDb({
     }
   }
 
-  // 4) Bulk update User balances
   const balanceOps = [];
 
   for (const [telegramId] of currentRoundTickets) {
@@ -877,7 +865,6 @@ async function initSocket(server) {
     console.error("[UNHANDLED] Unhandled rejection:", String(reason));
   });
 
-  // Middleware: Session
   io.use((socket, next) => {
     const req = socket.request;
     const res = new http.ServerResponse(req);
@@ -888,14 +875,12 @@ async function initSocket(server) {
     });
   });
 
-  // Middleware: Init check
   io.use((socket, next) => {
     if (!isInitialized) return next(new Error("SERVER_STARTING"));
     if (isShuttingDown) return next(new Error("SERVER_SHUTDOWN"));
     next();
   });
 
-  // Middleware: Authentication
   io.use(async (socket, next) => {
     try {
       const sessUser = socket.request.session?.user;
@@ -937,7 +922,6 @@ async function initSocket(server) {
     }
   });
 
-  // Connection handler
   io.on("connection", (socket) => {
     const { telegramId, username } = socket.user;
     const ru = runtimeUsers.get(telegramId);
@@ -947,7 +931,7 @@ async function initSocket(server) {
     socket.emit("userData", {
       telegramId,
       username,
-      Balance: fromMinor(ru?.balanceMinor ?? 0)
+      balance: fromMinor(ru?.balanceMinor ?? 0)
     });
 
     socket.emit("myRoundTickets", currentRoundTickets.get(telegramId) || []);
@@ -964,7 +948,6 @@ async function initSocket(server) {
       socket.emit("myRoundResult", roundUserResult.get(telegramId));
     }
 
-    // Ticket picking with race condition protection
     socket.on("pickTicket", async (data) => {
       const rateCheck = checkRateLimit(telegramId);
       if (!rateCheck.allowed) {
@@ -1041,7 +1024,7 @@ async function initSocket(server) {
 
           socket.emit("ticketConfirmed", {
             ticket,
-            Balance: fromMinor(ru.balanceMinor)
+            newBalance: fromMinor(ru.balanceMinor)
           });
 
           emitBalanceToUser(telegramId);
@@ -1059,7 +1042,6 @@ async function initSocket(server) {
       }
     });
 
-    // Disconnect handler
     socket.on("disconnect", () => {
       const tid = socketToTelegram.get(socket.id);
       socketToTelegram.delete(socket.id);
@@ -1077,10 +1059,8 @@ async function initSocket(server) {
     });
   });
 
-  // Start game loop
   startGameLoop();
   
-  // Periodic cleanup (every 5 minutes)
   setInterval(() => {
     for (const [sid, tid] of socketToTelegram) {
       if (!io.sockets.sockets.has(sid)) {
