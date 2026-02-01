@@ -399,10 +399,10 @@ function emitBalanceToUser(telegramId) {
   const ru = runtimeUsers.get(telegramId);
   if (!ru) return;
 
-  const balance = fromMinor(ru.balanceMinor);
+  const Balance = fromMinor(ru.balanceMinor);
   for (const sid of ru.sockets) {
     const s = io.sockets.sockets.get(sid);
-    if (s) s.emit("balanceUpdate", balance);
+    if (s) s.emit("balanceUpdate", Balance);
   }
 }
 
@@ -947,7 +947,7 @@ async function initSocket(server) {
     socket.emit("userData", {
       telegramId,
       username,
-      balance: fromMinor(ru?.balanceMinor ?? 0)
+      Balance: fromMinor(ru?.balanceMinor ?? 0)
     });
 
     socket.emit("myRoundTickets", currentRoundTickets.get(telegramId) || []);
@@ -1041,7 +1041,7 @@ async function initSocket(server) {
 
           socket.emit("ticketConfirmed", {
             ticket,
-            newBalance: fromMinor(ru.balanceMinor)
+            Balance: fromMinor(ru.balanceMinor)
           });
 
           emitBalanceToUser(telegramId);
