@@ -45,15 +45,15 @@ const UserSchema = new mongoose.Schema(
        ✅ POSITIVE ONLY (min: 0)
     ───────────────────────────────────── */
     Balance: {
-      type: Number,
-      default: 0,
-      min: [0, "Balance cannot be negative"],
-      set: (v) => {
-        const num = Number(v) || 0;
-        return Math.max(0, Math.round(num * 100) / 100); // Ensure positive & 2 decimals
-      },
-      get: (v) => Math.round((Number(v) || 0) * 100) / 100, // Ensure 2 decimal on read
-    },
+  type: Number,
+  default: 0,
+  min: [0, "Balance cannot be negative"],
+  set: (v) => {
+    const num = Number(v) || 0;
+    return Math.round(num * 100) / 100; // ✅ Allow negative for $inc
+  },
+  get: (v) => Math.round((Number(v) || 0) * 100) / 100,
+},
 
     /* ─────────────────────────────────────
        🛡️ ROLE / STATUS
