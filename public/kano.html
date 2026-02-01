@@ -1595,10 +1595,11 @@
       elements.maxPayout.textContent = (betAmount * maxMult).toFixed(0);
     }
 
-    /* ======================================== BET INPUT ======================================== */
-    function setBetAmount(val) {
+    /* ======================================== BET INPUT (FIXED) ======================================== */
+    function setBetAmount(val, enforceMin = true) {
       const raw = Math.floor(Number(val) || 0);
-      const n = clamp(raw, CONFIG.MIN_BET, CONFIG.MAX_BET);
+      const minVal = enforceMin ? CONFIG.MIN_BET : 0;
+      const n = clamp(raw, minVal, CONFIG.MAX_BET);
       elements.betInput.value = n;
       updateSubmitButton();
       renderOddsSection();
@@ -1612,10 +1613,29 @@
       setBetAmount((parseInt(elements.betInput.value) || CONFIG.MIN_BET) + CONFIG.BET_STEP);
     });
 
+    // Allow free typing without forcing minimum
     elements.betInput.addEventListener("input", () => {
       const v = elements.betInput.value;
-      if (v === "") return updateSubmitButton();
-      setBetAmount(v);
+      if (v === "") {
+        updateSubmitButton();
+        renderOddsSection();
+        return;
+      }
+      // Don't enforce minimum while typing, only enforce maximum
+      const raw = Math.floor(Number(v) || 0);
+      if (raw > CONFIG.MAX_BET) {
+        elements.betInput.value = CONFIG.MAX_BET;
+      }
+      updateSubmitButton();
+      renderOddsSection();
+    });
+
+    // Apply minimum when user finishes typing (on blur)
+    elements.betInput.addEventListener("blur", () => {
+      const v = parseInt(elements.betInput.value) || 0;
+      if (v < CONFIG.MIN_BET && v !== 0) {
+        setBetAmount(CONFIG.MIN_BET);
+      }
     });
 
     elements.submitBtn.addEventListener("click", () => {
@@ -1984,222 +2004,4 @@
         state.drawRevealTimeout = setTimeout(() => {
           showDrawNumber({ index: nextIndex, number: state.drawBatchNumbers[nextIndex - 1] }, true);
           scheduleNext(nextIndex + 1);
-        }, delay);
-      }
-
-      scheduleNext(already + 1);
-    }
-
-    function computeTotalWin(payload) {
-      if (!payload) return 0;
-      const direct = Number(payload.totalWin);
-      if (Number.isFinite(direct)) return Math.max(0, direct);
-
-      if (Array.isArray(payload.tickets)) {
-        return payload.tickets.reduce((sum, t) => sum + Math.max(0, Number(t?.winAmount || 0)), 0);
-      }
-      return 0;
-    }
-
-    function canShowRoundResultNow() {
-      if (!state.pendingDrawFinished) return false;
-      if (state.revealedCount < CONFIG.DRAW_SIZE) return false;
-
-      const hasTickets = state.liveTickets.length > 0;
-      if (hasTickets && !state.pendingMyRoundResult) return false;
-
-      return true;
-    }
-
-    function showRoundResult() {
-      if (!canShowRoundResultNow()) {
-        if (state.pendingDrawFinished && state.revealedCount >= CONFIG.DRAW_SIZE && state.liveTickets.length > 0 && !state.pendingMyRoundResult) {
-          elements.ballLabel.textContent = "Calculating result...";
-        }
-        return;
-      }
-
-      finalizeTicketMatches();
-
-      const hasTickets = state.liveTickets.length > 0;
-      const totalWin = hasTickets ? computeTotalWin(state.pendingMyRoundResult) : 0;
-      const anyWin = totalWin > 0;
-
-      elements.ballLabel.style.display = "none";
-      elements.resultContainer.classList.add("active");
-
-      if (hasTickets) {
-        if (anyWin) {
-          elements.resultText.textContent = "WIN";
-          elements.resultText.className = "result-text win";
-
-          elements.resultAmount.textContent = `${formatNumber(totalWin)} Birr`;
-          elements.resultAmount.classList.add("active");
-
-          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-          setTimeout(() => confetti({ particleCount: 50, spread: 100, origin: { y: 0.5 } }), 200);
-        } else {
-          elements.resultText.textContent = "LOSE";
-          elements.resultText.className = "result-text lose";
-          elements.resultAmount.classList.remove("active");
-        }
-      } else {
-        elements.resultText.textContent = "DRAW COMPLETE";
-        elements.resultText.className = "result-text";
-        elements.resultAmount.classList.remove("active");
-      }
-
-      hideStatus();
-      setTimeout(() => fetchGameData(), 800);
-
-      state.pendingDrawFinished = null;
-      state.pendingMyRoundResult = null;
-    }
-
-    /* ======================================== SOCKET EVENTS ======================================== */
-    socket.on("connect", () => {
-      state.isConnected = true;
-      hideModal();
-      hideStatus();
-      fetchGameData();
-      updateSubmitButton();
-    });
-
-    socket.on("disconnect", () => {
-      state.isConnected = false;
-      updateSubmitButton();
-    });
-
-    socket.on("connect_error", (error) => {
-      state.isConnected = false;
-      const messages = {
-        "NETWORK_LAGGING": ["Server Busy", "Please try again in a moment."],
-        "AUTH_REQUIRED": ["Open from Telegram", "Please access this game through Telegram."],
-        "USER_NOT_FOUND": ["Account Not Found", "Please register first."],
-        "USER_BLOCKED": ["Account Suspended", "Please contact support."],
-        "SERVER_SHUTDOWN": ["Server Restarting", "Please reconnect in a moment."]
-      };
-      const [title, msg] = messages[error.message] || ["Connection Issue", "Please check your connection."];
-      showModal(title, msg);
-      updateSubmitButton();
-    });
-
-    socket.on("serverShutdown", (payload) => {
-      showModal("Server Restarting", payload?.message || "Please reconnect shortly.");
-    });
-
-    // **FIXED: Added userData listener**
-    socket.on("userData", (data) => {
-      if (data?.balance != null) {
-        updateBalance(data.balance);
-      }
-    });
-
-    socket.on("myRoundTickets", (tickets) => {
-      state.liveTickets = Array.isArray(tickets) ? tickets : [];
-      renderLiveTickets();
-      updateSubmitButton();
-    });
-
-    socket.on("gameState", (gs) => {
-      if (gs?.gameId) state.currentGameId = gs.gameId;
-
-      if (gs?.phase === "betting") {
-        setPhase("betting");
-        updateTimer(gs.countdown);
-        return;
-      }
-
-      if (gs?.phase === "drawing" || gs?.phase === "result") {
-        state.myPickedSetCache = getMyPickedSet();
-        setPhase("drawing");
-        if (gs.drawBatch) syncAndStartReveal(gs.drawBatch);
-        if (gs.drawFinished) {
-          state.pendingDrawFinished = gs.drawFinished;
-          showRoundResult();
-        }
-        return;
-      }
-
-      setPhase("waiting");
-    });
-
-    socket.on("countdown", (seconds) => {
-      updateTimer(seconds);
-      if (state.currentPhase !== "betting") setPhase("betting");
-    });
-
-    socket.on("ticketConfirmed", (data) => {
-      if (data?.ticket) {
-        const exists = state.liveTickets.some(t => String(t.id) === String(data.ticket.id) && String(t.timestamp) === String(data.ticket.timestamp));
-        if (!exists) state.liveTickets.push(data.ticket);
-        renderLiveTickets();
-      }
-      if (data?.newBalance != null) updateBalance(data.newBalance);
-    });
-
-    socket.on("ticketError", (message) => showModal("Ticket Error", String(message || "Invalid ticket")));
-
-    socket.on("newRound", (payload) => {
-      cancelDrawReveal();
-      state.pendingDrawFinished = null;
-      state.pendingMyRoundResult = null;
-      state.liveTickets = [];
-      state.myPickedSetCache = new Set();
-      state.drawnNumbersSet = new Set();
-      state.currentDrawIndex = null;
-      state.currentGameId = payload?.gameId || null;
-      state.revealedCount = 0;
-      renderLiveTickets();
-      clearSelection();
-      setPhase("betting");
-      if (payload?.countdown != null) updateTimer(payload.countdown);
-      updateSubmitButton();
-    });
-
-    socket.on("balanceUpdate", updateBalance);
-
-    socket.on("drawStarted", (payload) => {
-      cancelDrawReveal();
-      state.pendingDrawFinished = null;
-      state.pendingMyRoundResult = null;
-      if (payload?.gameId) state.currentGameId = payload.gameId;
-
-      state.myPickedSetCache = getMyPickedSet();
-      state.revealedCount = 0;
-      state.drawnNumbersSet = new Set();
-
-      setPhase("drawing");
-      initDrawnBallsGrid();
-      renderLiveTickets();
-
-      elements.ballLabel.style.display = "block";
-      elements.ballLabel.textContent = "Drawing...";
-      elements.resultContainer.classList.remove("active");
-      gsap.set(elements.bigBall, { scale: 0.9, opacity: 0 });
-    });
-
-    socket.on("drawBatch", (batch) => {
-      state.myPickedSetCache = getMyPickedSet();
-      syncAndStartReveal(batch);
-    });
-
-    socket.on("myRoundResult", (payload) => {
-      state.pendingMyRoundResult = payload;
-      showRoundResult();
-    });
-
-    socket.on("drawFinished", (data) => {
-      state.pendingDrawFinished = data;
-      showRoundResult();
-    });
-
-    /* ======================================== INIT ======================================== */
-    initNumberGrid();
-    initOddsSection();
-    initDrawnBallsGrid();
-    setPhase("waiting");
-    renderOddsSection();
-  </script>
-</body>
-</html>
+        
