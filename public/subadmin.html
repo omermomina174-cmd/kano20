@@ -880,7 +880,7 @@
     </div>
   </div>
 
-  <script>
+<script>
     "use strict";
 
     /* ═══════════════════════════════════════════════════════════════
@@ -908,36 +908,18 @@
     ═══════════════════════════════════════════════════════════════ */
 
     const Utils = {
-      /**
-       * Get element by ID
-       */
       $: (id) => document.getElementById(id),
-
-      /**
-       * Query selector all
-       */
       $$: (sel) => document.querySelectorAll(sel),
 
-      /**
-       * Safe get value with fallback
-       */
-      safe: (value, fallback = "") => value ?? fallback,
-
-      /**
-       * Format amount with 2 decimals
-       */
       formatAmount: (n) => {
         const num = Number(n);
-        if (isNaN(num)) return "0.00";
+        if (!isFinite(num)) return "0.00";
         return num.toLocaleString("en-US", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         });
       },
 
-      /**
-       * Format time relative to now
-       */
       formatTime: (d) => {
         if (!d) return "";
         try {
@@ -956,38 +938,28 @@
         }
       },
 
-      /**
-       * Escape HTML special characters
-       */
       escapeHtml: (s) => {
-        const str = String(s ?? "");
-        return str.replace(/[&<>"']/g, (c) => ({
+        if (s == null) return "";
+        return String(s).replace(/[&<>"']/g, (c) => ({
           "&": "&amp;",
           "<": "&lt;",
           ">": "&gt;",
           '"': "&quot;",
           "'": "&#39;",
-        }[c] || c));
+        }[c]));
       },
 
-      /**
-       * Show toast notification
-       */
       showToast: (msg, type = "success") => {
         const toast = Utils.$("toast");
-        toast.textContent = msg;
+        if (!toast) return;
+        toast.textContent = String(msg || "");
         toast.className = `toast ${type} show`;
         setTimeout(() => toast.classList.remove("show"), CONFIG.TOAST_DURATION);
       },
 
-      /**
-       * Trigger haptic feedback
-       */
       haptic: (type = "light") => {
         try {
-          if (tg?.HapticFeedback?.impactOccurred) {
-            tg.HapticFeedback.impactOccurred(type);
-          }
+          tg?.HapticFeedback?.impactOccurred(type);
         } catch {}
       },
     };
@@ -997,9 +969,6 @@
     ═══════════════════════════════════════════════════════════════ */
 
     const API = {
-      /**
-       * Make API request with better error handling
-       */
       request: async (endpoint, options = {}) => {
         try {
           const res = await fetch(`${CONFIG.BASE_URL}${endpoint}`, {
@@ -1012,117 +981,44 @@
           });
 
           if (!res.ok) {
-            // Try to parse error response
-            try {
-              const errorData = await res.json();
-              return { ok: false, error: errorData.error || "REQUEST_FAILED" };
-            } catch {
-              return { ok: false, error: `HTTP_${res.status}` };
-            }
+            return { ok: false, error: `HTTP_${res.status}` };
           }
 
           const data = await res.json();
-          // Ensure ok field exists
-          return { ok: true, ...data };
+          return data || { ok: false, error: "EMPTY_RESPONSE" };
         } catch (e) {
           console.error("[API] Request failed:", e);
-          return { ok: false, error: e.message || "NETWORK_ERROR" };
+          return { ok: false, error: e?.message || "NETWORK_ERROR" };
         }
       },
 
-      /**
-       * Authenticate user
-       */
-      auth: () => {
-        return API.request("/api/auth", {
-          method: "POST",
-          body: JSON.stringify({ initData: tg?.initData || "" }),
-        });
-      },
+      auth: () => API.request("/api/auth", {
+        method: "POST",
+        body: JSON.stringify({ initData: tg?.initData || "" }),
+      }),
 
-      /**
-       * Toggle status
-       */
-      toggleStatus: () => {
-        return API.request("/api/toggle-status", { method: "POST" });
-      },
-
-      /**
-       * Get statistics
-       */
-      getStats: () => {
-        return API.request("/api/stats");
-      },
-
-      /**
-       * Get deposits
-       */
-      getDeposits: (params = {}) => {
-        const query = new URLSearchParams(params);
-        return API.request(`/api/deposits?${query}`);
-      },
-
-      /**
-       * Get withdrawals
-       */
-      getWithdraws: (params = {}) => {
-        const query = new URLSearchParams(params);
-        return API.request(`/api/withdraws?${query}`);
-      },
-
-      /**
-       * Approve deposit
-       */
-      approveDeposit: (id) => {
-        return API.request(`/api/deposits/${id}/approve`, { method: "POST" });
-      },
-
-      /**
-       * Bulk approve deposits
-       */
-      bulkApproveDeposits: (ids) => {
-        return API.request("/api/deposits/bulk-approve", {
-          method: "POST",
-          body: JSON.stringify({ ids }),
-        });
-      },
-
-      /**
-       * Reject deposit
-       */
-      rejectDeposit: (id, reason) => {
-        return API.request(`/api/deposits/${id}/reject`, {
-          method: "POST",
-          body: JSON.stringify({ reason }),
-        });
-      },
-
-      /**
-       * Approve withdrawal
-       */
-      approveWithdraw: (id) => {
-        return API.request(`/api/withdraws/${id}/approve`, { method: "POST" });
-      },
-
-      /**
-       * Bulk approve withdrawals
-       */
-      bulkApproveWithdraws: (ids) => {
-        return API.request("/api/withdraws/bulk-approve", {
-          method: "POST",
-          body: JSON.stringify({ ids }),
-        });
-      },
-
-      /**
-       * Reject withdrawal
-       */
-      rejectWithdraw: (id, reason) => {
-        return API.request(`/api/withdraws/${id}/reject`, {
-          method: "POST",
-          body: JSON.stringify({ reason }),
-        });
-      },
+      toggleStatus: () => API.request("/api/toggle-status", { method: "POST" }),
+      getStats: () => API.request("/api/stats"),
+      getDeposits: (params = {}) => API.request(`/api/deposits?${new URLSearchParams(params)}`),
+      getWithdraws: (params = {}) => API.request(`/api/withdraws?${new URLSearchParams(params)}`),
+      approveDeposit: (id) => API.request(`/api/deposits/${id}/approve`, { method: "POST" }),
+      bulkApproveDeposits: (ids) => API.request("/api/deposits/bulk-approve", {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+      }),
+      rejectDeposit: (id, reason) => API.request(`/api/deposits/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
+      approveWithdraw: (id) => API.request(`/api/withdraws/${id}/approve`, { method: "POST" }),
+      bulkApproveWithdraws: (ids) => API.request("/api/withdraws/bulk-approve", {
+        method: "POST",
+        body: JSON.stringify({ ids }),
+      }),
+      rejectWithdraw: (id, reason) => API.request(`/api/withdraws/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      }),
     };
 
     /* ═══════════════════════════════════════════════════════════════
@@ -1154,16 +1050,10 @@
         selected: new Set(),
       },
 
-      /**
-       * Get current collection
-       */
       getCurrentCollection() {
         return this[this.currentTab];
       },
 
-      /**
-       * Reset collection
-       */
       resetCollection(type) {
         this[type].items = [];
         this[type].cursor = null;
@@ -1172,13 +1062,11 @@
         this[type].ids.clear();
       },
 
-      /**
-       * Add items to collection
-       */
       addItems(type, items, append = false) {
+        if (!Array.isArray(items)) return [];
+        
         const collection = this[type];
-        const validItems = (items || []).filter(item => item && item.id);
-        const newItems = validItems.filter((item) => !collection.ids.has(item.id));
+        const newItems = items.filter((item) => item && item.id && !collection.ids.has(item.id));
         newItems.forEach((item) => collection.ids.add(item.id));
 
         if (append) {
@@ -1190,33 +1078,21 @@
         return newItems;
       },
 
-      /**
-       * Remove item from collection
-       */
       removeItem(type, id) {
         this[type].items = this[type].items.filter((item) => item.id !== id);
         this[type].ids.delete(id);
         this[type].selected.delete(id);
       },
 
-      /**
-       * Clear all selections
-       */
       clearSelections() {
         this.deposits.selected.clear();
         this.withdraws.selected.clear();
       },
 
-      /**
-       * Get total selected count
-       */
       getTotalSelected() {
         return this.deposits.selected.size + this.withdraws.selected.size;
       },
 
-      /**
-       * Get selected items
-       */
       getSelectedItems(type) {
         return this[type].items.filter((item) => this[type].selected.has(item.id));
       },
@@ -1227,21 +1103,17 @@
     ═══════════════════════════════════════════════════════════════ */
 
     const UI = {
-      /**
-       * Update balance display
-       */
       updateBalance(balance) {
         State.balance = Number(balance) || 0;
         const el = Utils.$("balanceValue");
-        el.textContent = Utils.formatAmount(State.balance);
-        el.className =
-          "info-value " +
-          (State.balance > 0 ? "positive" : State.balance < 0 ? "negative" : "zero");
+        if (el) {
+          el.textContent = Utils.formatAmount(State.balance);
+          el.className =
+            "info-value " +
+            (State.balance > 0 ? "positive" : State.balance < 0 ? "negative" : "zero");
+        }
       },
 
-      /**
-       * Update status display
-       */
       updateStatus(status) {
         State.status = String(status || "active").toLowerCase();
         const isActive = State.status === "active";
@@ -1250,16 +1122,20 @@
         const label = Utils.$("statusLabel");
         const warning = Utils.$("sleepWarning");
 
-        if (isActive) {
-          toggle.classList.add("active");
-          label.textContent = "ACTIVE";
-          label.className = "status-label active";
-          warning.classList.remove("show");
-        } else {
-          toggle.classList.remove("active");
-          label.textContent = "SLEEP";
-          label.className = "status-label sleep";
-          warning.classList.add("show");
+        if (toggle) {
+          toggle.classList.toggle("active", isActive);
+        }
+
+        if (label) {
+          label.textContent = isActive ? "ACTIVE" : "SLEEP";
+          label.className = `status-label ${isActive ? "active" : "sleep"}`;
+        }
+
+        if (warning) {
+          warning.classList.toggle("show", !isActive);
+        }
+
+        if (!isActive) {
           State.clearSelections();
           this.updateAllSelections("deposits");
           this.updateAllSelections("withdraws");
@@ -1270,22 +1146,21 @@
         });
       },
 
-      /**
-       * Update stats display
-       */
       updateStats(deposits, withdraws) {
-        const depCount = Number(deposits?.count) || 0;
-        const wdCount = Number(withdraws?.count) || 0;
+        const depCount = deposits?.count || 0;
+        const wdCount = withdraws?.count || 0;
 
-        Utils.$("depositCount").textContent = depCount;
-        Utils.$("tabDepCount").textContent = depCount;
-        Utils.$("withdrawCount").textContent = wdCount;
-        Utils.$("tabWdCount").textContent = wdCount;
+        const depEl = Utils.$("depositCount");
+        const tabDepEl = Utils.$("tabDepCount");
+        const wdEl = Utils.$("withdrawCount");
+        const tabWdEl = Utils.$("tabWdCount");
+
+        if (depEl) depEl.textContent = depCount;
+        if (tabDepEl) tabDepEl.textContent = depCount;
+        if (wdEl) wdEl.textContent = wdCount;
+        if (tabWdEl) tabWdEl.textContent = wdCount;
       },
 
-      /**
-       * Toggle selection for item
-       */
       toggleSelection(type, id) {
         if (State.status !== "active") {
           Utils.showToast("Enable active mode", "error");
@@ -1305,9 +1180,6 @@
         this.updateBulkActionBar();
       },
 
-      /**
-       * Toggle select all
-       */
       toggleSelectAll(type) {
         if (State.status !== "active") {
           Utils.showToast("Enable active mode", "error");
@@ -1328,9 +1200,6 @@
         this.updateBulkActionBar();
       },
 
-      /**
-       * Clear all selections
-       */
       clearSelections() {
         Utils.haptic("light");
         State.clearSelections();
@@ -1339,9 +1208,6 @@
         this.updateBulkActionBar();
       },
 
-      /**
-       * Update selection UI for single item
-       */
       updateSelectionUI(type, id) {
         const prefix = type === "deposits" ? "dep" : "wd";
         const checkbox = document.querySelector(`#${prefix}-${id} .item-checkbox`);
@@ -1356,18 +1222,12 @@
         this.updateSelectAllCheckbox(type);
       },
 
-      /**
-       * Update all selections UI
-       */
       updateAllSelections(type) {
         State[type].items.forEach((item) => {
           this.updateSelectionUI(type, item.id);
         });
       },
 
-      /**
-       * Update select all checkbox
-       */
       updateSelectAllCheckbox(type) {
         const checkbox = Utils.$(`${type}SelectAllCheckbox`);
         if (!checkbox) return;
@@ -1383,12 +1243,11 @@
         );
       },
 
-      /**
-       * Update bulk action bar
-       */
       updateBulkActionBar() {
         const totalSelected = State.getTotalSelected();
         const bar = Utils.$("bulkActionBar");
+
+        if (!bar) return;
 
         if (totalSelected > 0) {
           bar.classList.add("show");
@@ -1407,51 +1266,45 @@
             }
           });
 
-          Utils.$("bulkCount").textContent = `${totalSelected} selected`;
-          Utils.$("bulkTotal").textContent = `Total: ${Utils.formatAmount(totalAmount)} Birr`;
+          const countEl = Utils.$("bulkCount");
+          const totalEl = Utils.$("bulkTotal");
+
+          if (countEl) countEl.textContent = `${totalSelected} selected`;
+          if (totalEl) totalEl.textContent = `Total: ${Utils.formatAmount(totalAmount)} Birr`;
         } else {
           bar.classList.remove("show");
         }
       },
 
-      /**
-       * Show loading indicator
-       */
       showLoading(type, more = false) {
-        if (more) {
-          Utils.$(`${type === "deposits" ? "dep" : "wd"}LoadingMore`).style.display = "block";
-        } else {
-          Utils.$(`${type === "deposits" ? "dep" : "wd"}Loading`).style.display = "block";
-        }
+        const el = Utils.$(`${type === "deposits" ? "dep" : "wd"}Loading${more ? "More" : ""}`);
+        if (el) el.style.display = "block";
       },
 
-      /**
-       * Hide loading indicator
-       */
       hideLoading(type) {
-        Utils.$(`${type === "deposits" ? "dep" : "wd"}Loading`).style.display = "none";
-        Utils.$(`${type === "deposits" ? "dep" : "wd"}LoadingMore`).style.display = "none";
+        const prefix = type === "deposits" ? "dep" : "wd";
+        const loading = Utils.$(`${prefix}Loading`);
+        const loadingMore = Utils.$(`${prefix}LoadingMore`);
+        if (loading) loading.style.display = "none";
+        if (loadingMore) loadingMore.style.display = "none";
       },
 
-      /**
-       * Show empty state
-       */
       showEmpty(type) {
-        Utils.$(`${type === "deposits" ? "dep" : "wd"}Empty`).style.display = "block";
-        Utils.$(`${type === "deposits" ? "dep" : "wd"}SelectAll`).style.display = "none";
+        const prefix = type === "deposits" ? "dep" : "wd";
+        const empty = Utils.$(`${prefix}Empty`);
+        const selectAll = Utils.$(`${type}SelectAll`);
+        if (empty) empty.style.display = "block";
+        if (selectAll) selectAll.style.display = "none";
       },
 
-      /**
-       * Hide empty state
-       */
       hideEmpty(type) {
-        Utils.$(`${type === "deposits" ? "dep" : "wd"}Empty`).style.display = "none";
-        Utils.$(`${type === "deposits" ? "dep" : "wd"}SelectAll`).style.display = "flex";
+        const prefix = type === "deposits" ? "dep" : "wd";
+        const empty = Utils.$(`${prefix}Empty`);
+        const selectAll = Utils.$(`${type}SelectAll`);
+        if (empty) empty.style.display = "none";
+        if (selectAll) selectAll.style.display = "flex";
       },
 
-      /**
-       * Switch tabs
-       */
       switchTab(tab) {
         State.currentTab = tab;
         Utils.$$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
@@ -1465,14 +1318,10 @@
     ═══════════════════════════════════════════════════════════════ */
 
     const Render = {
-      /**
-       * Render deposit item
-       */
       depositItem(deposit, prepend = false) {
+        if (!deposit || !deposit.id) return null;
+
         const div = document.createElement("div");
-        const amount = Number(deposit.amount) || 0;
-        const phone = Utils.safe(deposit.senderPhone, "N/A");
-        
         div.className = `list-item ${State.status !== "active" ? "disabled" : ""} ${
           prepend ? "new" : ""
         } ${State.deposits.selected.has(deposit.id) ? "selected" : ""}`;
@@ -1484,31 +1333,28 @@
             }" onclick="UI.toggleSelection('deposits', '${deposit.id}')"></div>
             <div class="list-item__row">
               <div>
-                <div class="list-item__phone">📱 ${Utils.escapeHtml(phone)}</div>
+                <div class="list-item__phone">📱 ${Utils.escapeHtml(deposit.senderPhone)}</div>
               </div>
               <div class="list-item__right">
-                <div class="list-item__amount green">+${Utils.formatAmount(amount)}</div>
+                <div class="list-item__amount green">+${Utils.formatAmount(deposit.amount)}</div>
                 <div class="list-item__time">${Utils.formatTime(deposit.createdAt)}</div>
               </div>
             </div>
           </div>
           <div class="list-item__actions">
             <button class="btn btn-approve" onclick="Actions.approveDeposit('${deposit.id}')">✓ Approve</button>
-            <button class="btn btn-reject" onclick="Actions.openRejectModal('deposit', '${deposit.id}')">✗ Reject</button>
+            <button class="btn btn-reject" onclick="Actions.openRejectModal('deposit', '${
+              deposit.id
+            }')">✗ Reject</button>
           </div>
         `;
         return div;
       },
 
-      /**
-       * Render withdrawal item
-       */
       withdrawItem(withdraw, prepend = false) {
+        if (!withdraw || !withdraw.id) return null;
+
         const div = document.createElement("div");
-        const amount = Number(withdraw.amount) || 0;
-        const phone = Utils.safe(withdraw.receiverPhone, "N/A");
-        const name = Utils.safe(withdraw.receiverFirstName, "");
-        
         div.className = `list-item ${State.status !== "active" ? "disabled" : ""} ${
           prepend ? "new" : ""
         } ${State.withdraws.selected.has(withdraw.id) ? "selected" : ""}`;
@@ -1520,35 +1366,36 @@
             }" onclick="UI.toggleSelection('withdraws', '${withdraw.id}')"></div>
             <div class="list-item__row">
               <div>
-                <div class="list-item__phone">📱 ${Utils.escapeHtml(phone)}</div>
-                ${name ? `<div class="list-item__name">👤 ${Utils.escapeHtml(name)}</div>` : ""}
+                <div class="list-item__phone">📱 ${Utils.escapeHtml(withdraw.receiverPhone)}</div>
+                <div class="list-item__name">👤 ${Utils.escapeHtml(
+                  withdraw.receiverFirstName
+                ) || "—"}</div>
               </div>
               <div class="list-item__right">
-                <div class="list-item__amount gold">-${Utils.formatAmount(amount)}</div>
+                <div class="list-item__amount gold">-${Utils.formatAmount(withdraw.amount)}</div>
                 <div class="list-item__time">${Utils.formatTime(withdraw.createdAt)}</div>
               </div>
             </div>
           </div>
           <div class="list-item__actions">
             <button class="btn btn-approve" onclick="Actions.approveWithdraw('${withdraw.id}')">✓ Approve</button>
-            <button class="btn btn-reject" onclick="Actions.openRejectModal('withdraw', '${withdraw.id}')">✗ Reject</button>
+            <button class="btn btn-reject" onclick="Actions.openRejectModal('withdraw', '${
+              withdraw.id
+            }')">✗ Reject</button>
           </div>
         `;
         return div;
       },
 
-      /**
-       * Render deposits list
-       */
       deposits(items, append = false, prepend = false) {
         const list = Utils.$("depositsList");
+        if (!list) return;
         if (!append) list.innerHTML = "";
 
-        const validItems = (items || []).filter(item => item && item.id);
-        
-        validItems.forEach((deposit) => {
+        items.forEach((deposit) => {
           if (Utils.$(`dep-${deposit.id}`)) return;
           const item = this.depositItem(deposit, prepend);
+          if (!item) return;
           if (prepend) {
             list.insertBefore(item, list.firstChild);
           } else {
@@ -1557,18 +1404,15 @@
         });
       },
 
-      /**
-       * Render withdrawals list
-       */
       withdraws(items, append = false, prepend = false) {
         const list = Utils.$("withdrawsList");
+        if (!list) return;
         if (!append) list.innerHTML = "";
 
-        const validItems = (items || []).filter(item => item && item.id);
-        
-        validItems.forEach((withdraw) => {
+        items.forEach((withdraw) => {
           if (Utils.$(`wd-${withdraw.id}`)) return;
           const item = this.withdrawItem(withdraw, prepend);
+          if (!item) return;
           if (prepend) {
             list.insertBefore(item, list.firstChild);
           } else {
@@ -1583,61 +1427,55 @@
     ═══════════════════════════════════════════════════════════════ */
 
     const Actions = {
-      /**
-       * Authenticate user
-       */
       async authenticate() {
         const r = await API.auth();
-        if (!r.ok) throw new Error(r.error || "AUTH_FAILED");
+        if (!r || !r.ok) {
+          throw new Error(r?.error || "AUTH_FAILED");
+        }
 
-        const username = Utils.safe(r.subadmin?.username, "SubAdmin");
-        Utils.$("userInfo").textContent = `👤 ${username}`;
+        const userInfo = Utils.$("userInfo");
+        if (userInfo) {
+          userInfo.textContent = `👤 ${r.subadmin?.username || "SubAdmin"}`;
+        }
+
         UI.updateBalance(r.subadmin?.balance);
         UI.updateStatus(r.subadmin?.status);
 
         return r.subadmin;
       },
 
-      /**
-       * Toggle status
-       */
       async toggleStatus() {
         Utils.haptic("medium");
         const r = await API.toggleStatus();
 
-        if (r.ok) {
+        if (r && r.ok) {
           UI.updateStatus(r.status);
           Utils.showToast(r.status === "active" ? "✓ Active" : "😴 Sleep");
         } else {
-          Utils.showToast("Failed: " + (r.error || "Unknown"), "error");
+          Utils.showToast(r?.error || "Failed", "error");
         }
       },
 
-      /**
-       * Load statistics
-       */
       async loadStats(silent = false) {
         if (!silent) {
-          Utils.$("refreshIndicator").classList.add("active");
+          const indicator = Utils.$("refreshIndicator");
+          if (indicator) indicator.classList.add("active");
         }
 
         const r = await API.getStats();
 
-        Utils.$("refreshIndicator").classList.remove("active");
-
-        if (!r.ok) {
-          if (!silent) Utils.showToast("Stats failed: " + (r.error || "Unknown"), "error");
-          return;
+        if (!silent) {
+          const indicator = Utils.$("refreshIndicator");
+          if (indicator) indicator.classList.remove("active");
         }
 
-        UI.updateStats(r.deposits, r.withdraws);
-        if (r.balance !== undefined && r.balance !== null) UI.updateBalance(r.balance);
+        if (!r || !r.ok) return;
+
+        UI.updateStats(r.deposits || {}, r.withdraws || {});
+        if (r.balance !== undefined) UI.updateBalance(r.balance);
         if (r.status) UI.updateStatus(r.status);
       },
 
-      /**
-       * Load deposits
-       */
       async loadDeposits(append = false) {
         const s = State.deposits;
         if (s.loading) return;
@@ -1658,13 +1496,12 @@
         s.loading = false;
         UI.hideLoading("deposits");
 
-        if (!r.ok) {
-          Utils.showToast("Load failed: " + (r.error || "Unknown"), "error");
+        if (!r || !r.ok) {
+          Utils.showToast(r?.error || "Load failed", "error");
           return;
         }
 
-        const items = r.items || [];
-        const newItems = State.addItems("deposits", items, append);
+        const newItems = State.addItems("deposits", r.items || [], append);
         s.hasMore = r.hasMore || false;
         s.cursor = r.nextCursor || null;
 
@@ -1679,18 +1516,14 @@
         UI.updateSelectAllCheckbox("deposits");
       },
 
-      /**
-       * Check for new deposits
-       */
       async checkNewDeposits() {
         if (State.currentTab !== "deposits") return;
 
         const r = await API.getDeposits({ limit: 10 });
-        if (!r.ok) return;
+        if (!r || !r.ok) return;
 
         const s = State.deposits;
-        const items = r.items || [];
-        const newItems = items.filter((item) => item && item.id && !s.ids.has(item.id));
+        const newItems = (r.items || []).filter((item) => item && !s.ids.has(item.id));
 
         if (newItems.length > 0) {
           State.addItems("deposits", newItems, false);
@@ -1702,9 +1535,6 @@
         }
       },
 
-      /**
-       * Approve deposit
-       */
       async approveDeposit(id) {
         if (State.status !== "active") {
           Utils.showToast("Enable active mode", "error");
@@ -1717,11 +1547,14 @@
 
         const r = await API.approveDeposit(id);
 
-        if (r.ok) {
+        if (r && r.ok) {
           Utils.showToast("✓ Approved!");
           Utils.haptic("success");
           UI.updateBalance(r.newBalance);
-          Utils.$(`dep-${id}`)?.remove();
+          
+          const elem = Utils.$(`dep-${id}`);
+          if (elem) elem.remove();
+          
           State.removeItem("deposits", id);
           this.loadStats(true);
           UI.updateBulkActionBar();
@@ -1732,15 +1565,11 @@
             UI.updateSelectAllCheckbox("deposits");
           }
         } else {
-          const errorMsg = r.error === "SLEEP_MODE" ? "Enable active mode" : (r.error || "Failed");
-          Utils.showToast(errorMsg, "error");
+          Utils.showToast(r?.error === "SLEEP_MODE" ? "Enable active mode" : (r?.error || "Failed"), "error");
           if (btn) btn.disabled = false;
         }
       },
 
-      /**
-       * Load withdrawals
-       */
       async loadWithdraws(append = false) {
         const s = State.withdraws;
         if (s.loading) return;
@@ -1761,13 +1590,12 @@
         s.loading = false;
         UI.hideLoading("withdraws");
 
-        if (!r.ok) {
-          Utils.showToast("Load failed: " + (r.error || "Unknown"), "error");
+        if (!r || !r.ok) {
+          Utils.showToast(r?.error || "Load failed", "error");
           return;
         }
 
-        const items = r.items || [];
-        const newItems = State.addItems("withdraws", items, append);
+        const newItems = State.addItems("withdraws", r.items || [], append);
         s.hasMore = r.hasMore || false;
         s.cursor = r.nextCursor || null;
 
@@ -1782,18 +1610,14 @@
         UI.updateSelectAllCheckbox("withdraws");
       },
 
-      /**
-       * Check for new withdrawals
-       */
       async checkNewWithdraws() {
         if (State.currentTab !== "withdraws") return;
 
         const r = await API.getWithdraws({ limit: 10 });
-        if (!r.ok) return;
+        if (!r || !r.ok) return;
 
         const s = State.withdraws;
-        const items = r.items || [];
-        const newItems = items.filter((item) => item && item.id && !s.ids.has(item.id));
+        const newItems = (r.items || []).filter((item) => item && !s.ids.has(item.id));
 
         if (newItems.length > 0) {
           State.addItems("withdraws", newItems, false);
@@ -1805,9 +1629,6 @@
         }
       },
 
-      /**
-       * Approve withdrawal
-       */
       async approveWithdraw(id) {
         if (State.status !== "active") {
           Utils.showToast("Enable active mode", "error");
@@ -1820,11 +1641,14 @@
 
         const r = await API.approveWithdraw(id);
 
-        if (r.ok) {
+        if (r && r.ok) {
           Utils.showToast("✓ Approved!");
           Utils.haptic("success");
           UI.updateBalance(r.newBalance);
-          Utils.$(`wd-${id}`)?.remove();
+          
+          const elem = Utils.$(`wd-${id}`);
+          if (elem) elem.remove();
+          
           State.removeItem("withdraws", id);
           this.loadStats(true);
           UI.updateBulkActionBar();
@@ -1835,15 +1659,11 @@
             UI.updateSelectAllCheckbox("withdraws");
           }
         } else {
-          const errorMsg = r.error === "SLEEP_MODE" ? "Enable active mode" : (r.error || "Failed");
-          Utils.showToast(errorMsg, "error");
+          Utils.showToast(r?.error === "SLEEP_MODE" ? "Enable active mode" : (r?.error || "Failed"), "error");
           if (btn) btn.disabled = false;
         }
       },
 
-      /**
-       * Bulk approve selected items
-       */
       async bulkApproveSelected() {
         if (State.status !== "active") {
           Utils.showToast("Enable active mode", "error");
@@ -1859,22 +1679,23 @@
         }
 
         Utils.haptic("heavy");
-        Utils.$("bulkApprove").disabled = true;
+        const bulkBtn = Utils.$("bulkApprove");
+        if (bulkBtn) bulkBtn.disabled = true;
 
         let totalApproved = 0;
         let totalFailed = 0;
 
-        // Bulk approve deposits
         if (depositIds.length > 0) {
           const r = await API.bulkApproveDeposits(depositIds);
 
-          if (r.ok) {
-            totalApproved += Number(r.approved) || 0;
-            totalFailed += Number(r.failed) || 0;
+          if (r && r.ok) {
+            totalApproved += r.approved || 0;
+            totalFailed += r.failed || 0;
             UI.updateBalance(r.newBalance);
 
             depositIds.forEach((id) => {
-              Utils.$(`dep-${id}`)?.remove();
+              const elem = Utils.$(`dep-${id}`);
+              if (elem) elem.remove();
               State.removeItem("deposits", id);
             });
           } else {
@@ -1882,17 +1703,17 @@
           }
         }
 
-        // Bulk approve withdrawals
         if (withdrawIds.length > 0) {
           const r = await API.bulkApproveWithdraws(withdrawIds);
 
-          if (r.ok) {
-            totalApproved += Number(r.approved) || 0;
-            totalFailed += Number(r.failed) || 0;
+          if (r && r.ok) {
+            totalApproved += r.approved || 0;
+            totalFailed += r.failed || 0;
             UI.updateBalance(r.newBalance);
 
             withdrawIds.forEach((id) => {
-              Utils.$(`wd-${id}`)?.remove();
+              const elem = Utils.$(`wd-${id}`);
+              if (elem) elem.remove();
               State.removeItem("withdraws", id);
             });
           } else {
@@ -1900,7 +1721,7 @@
           }
         }
 
-        Utils.$("bulkApprove").disabled = false;
+        if (bulkBtn) bulkBtn.disabled = false;
 
         if (totalApproved > 0) {
           Utils.showToast(
@@ -1915,7 +1736,6 @@
         UI.clearSelections();
         this.loadStats(true);
 
-        // Reload if empty
         if (State.deposits.items.length === 0 && State.currentTab === "deposits") {
           this.loadDeposits();
         }
@@ -1924,9 +1744,6 @@
         }
       },
 
-      /**
-       * Open reject modal
-       */
       openRejectModal(type, id) {
         if (State.status !== "active") {
           Utils.showToast("Enable active mode", "error");
@@ -1935,43 +1752,44 @@
 
         Utils.haptic("light");
         State.rejectTarget = { type, id };
-        Utils.$("rejectReason").value = "";
-        Utils.$("rejectModal").classList.add("show");
+        
+        const reasonEl = Utils.$("rejectReason");
+        if (reasonEl) reasonEl.value = "";
+        
+        const modal = Utils.$("rejectModal");
+        if (modal) modal.classList.add("show");
       },
 
-      /**
-       * Close reject modal
-       */
       closeRejectModal() {
-        Utils.$("rejectModal").classList.remove("show");
+        const modal = Utils.$("rejectModal");
+        if (modal) modal.classList.remove("show");
         State.rejectTarget = null;
       },
 
-      /**
-       * Confirm rejection
-       */
       async confirmReject() {
         if (!State.rejectTarget) return;
 
         const { type, id } = State.rejectTarget;
-        const reason = Utils.$("rejectReason").value.trim();
+        const reasonEl = Utils.$("rejectReason");
+        const reason = reasonEl ? reasonEl.value.trim() : "";
 
-        Utils.$("confirmReject").disabled = true;
+        const confirmBtn = Utils.$("confirmReject");
+        if (confirmBtn) confirmBtn.disabled = true;
 
-        const r =
-          type === "deposit"
-            ? await API.rejectDeposit(id, reason)
-            : await API.rejectWithdraw(id, reason);
+        const r = type === "deposit"
+          ? await API.rejectDeposit(id, reason)
+          : await API.rejectWithdraw(id, reason);
 
-        Utils.$("confirmReject").disabled = false;
+        if (confirmBtn) confirmBtn.disabled = false;
 
-        if (r.ok) {
+        if (r && r.ok) {
           Utils.showToast("✗ Rejected");
           Utils.haptic("warning");
           this.closeRejectModal();
 
           const elemId = type === "deposit" ? `dep-${id}` : `wd-${id}`;
-          Utils.$(elemId)?.remove();
+          const elem = Utils.$(elemId);
+          if (elem) elem.remove();
 
           const collectionType = type === "deposit" ? "deposits" : "withdraws";
           State.removeItem(collectionType, id);
@@ -1985,8 +1803,7 @@
             UI.updateSelectAllCheckbox(collectionType);
           }
         } else {
-          const errorMsg = r.error === "SLEEP_MODE" ? "Enable active mode" : (r.error || "Failed");
-          Utils.showToast(errorMsg, "error");
+          Utils.showToast(r?.error === "SLEEP_MODE" ? "Enable active mode" : (r?.error || "Failed"), "error");
         }
       },
     };
@@ -1997,7 +1814,8 @@
 
     const AutoRefresh = {
       start() {
-        Utils.$("autoRefreshBadge").style.display = "flex";
+        const badge = Utils.$("autoRefreshBadge");
+        if (badge) badge.style.display = "flex";
 
         State.autoRefreshTimer = setInterval(() => {
           if (State.currentTab === "deposits") {
@@ -2013,7 +1831,8 @@
           clearInterval(State.autoRefreshTimer);
           State.autoRefreshTimer = null;
         }
-        Utils.$("autoRefreshBadge").style.display = "none";
+        const badge = Utils.$("autoRefreshBadge");
+        if (badge) badge.style.display = "none";
       },
 
       setupVisibilityHandler() {
@@ -2067,10 +1886,11 @@
 
     const EventListeners = {
       setup() {
-        // Toggle status
-        Utils.$("toggleSwitch").addEventListener("click", () => Actions.toggleStatus());
+        const toggleSwitch = Utils.$("toggleSwitch");
+        if (toggleSwitch) {
+          toggleSwitch.addEventListener("click", () => Actions.toggleStatus());
+        }
 
-        // Tabs
         Utils.$$(".tab").forEach((tab) => {
           tab.addEventListener("click", () => {
             Utils.haptic("light");
@@ -2085,13 +1905,15 @@
           });
         });
 
-        // Bulk actions
-        Utils.$("bulkApprove").addEventListener("click", () => Actions.bulkApproveSelected());
-        Utils.$("bulkClear").addEventListener("click", () => UI.clearSelections());
+        const bulkApprove = Utils.$("bulkApprove");
+        const bulkClear = Utils.$("bulkClear");
+        const cancelReject = Utils.$("cancelReject");
+        const confirmReject = Utils.$("confirmReject");
 
-        // Reject modal
-        Utils.$("cancelReject").addEventListener("click", () => Actions.closeRejectModal());
-        Utils.$("confirmReject").addEventListener("click", () => Actions.confirmReject());
+        if (bulkApprove) bulkApprove.addEventListener("click", () => Actions.bulkApproveSelected());
+        if (bulkClear) bulkClear.addEventListener("click", () => UI.clearSelections());
+        if (cancelReject) cancelReject.addEventListener("click", () => Actions.closeRejectModal());
+        if (confirmReject) confirmReject.addEventListener("click", () => Actions.confirmReject());
       },
     };
 
@@ -2111,15 +1933,16 @@
         AutoRefresh.start();
       } catch (e) {
         console.error("Init error:", e);
-        Utils.$("userInfo").textContent = `❌ ${e.message || "Init failed"}`;
+        const userInfo = Utils.$("userInfo");
+        if (userInfo) {
+          userInfo.textContent = `❌ ${e?.message || "Error"}`;
+        }
         Utils.showToast("Auth failed", "error");
       }
     }
 
-    // Start application
     init();
 
-    // Expose to global scope for inline event handlers
     window.Actions = Actions;
     window.UI = UI;
   </script>
