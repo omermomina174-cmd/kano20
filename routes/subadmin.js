@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const SubAdmin = require('../models/SubAdmin'); // Your model
+const subadmin = require('../models/subadmin');
+const deposit = require('../models/deposit');
+const withdraw = require('../models/withdraw');
 
 // ═══════════════════════════════════════════════════════════════
 // SERVE HTML PAGE
@@ -16,22 +18,22 @@ router.get('/', (req, res) => {
 router.post('/api/auth', async (req, res) => {
   try {
     // Your existing auth logic here
-    const subadmin = req.session.subadmin || await yourAuthFunction(req.body.initData);
+    const subadminUser = req.session.subadmin || await yourAuthFunction(req.body.initData);
     
-    if (!subadmin) {
+    if (!subadminUser) {
       return res.json({ ok: false, error: 'AUTH_FAILED' });
     }
 
-    req.session.subadmin = subadmin;
+    req.session.subadmin = subadminUser;
     
     res.json({
       ok: true,
       subadmin: {
-        id: subadmin.id || subadmin._id,
-        username: subadmin.username,
-        first_name: subadmin.first_name,
-        balance: subadmin.balance || 0,
-        status: subadmin.status || 'active'
+        id: subadminUser.id || subadminUser._id,
+        username: subadminUser.username,
+        first_name: subadminUser.first_name,
+        balance: subadminUser.balance || 0,
+        status: subadminUser.status || 'active'
       }
     });
   } catch (error) {
@@ -52,7 +54,7 @@ router.post('/api/toggle-status', async (req, res) => {
     const newStatus = req.session.subadmin.status === 'active' ? 'sleep' : 'active';
     
     // Update in database
-    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { status: newStatus });
+    await subadmin.findByIdAndUpdate(req.session.subadmin._id, { status: newStatus });
     
     req.session.subadmin.status = newStatus;
     res.json({ ok: true, status: newStatus });
@@ -70,11 +72,8 @@ router.get('/api/stats', async (req, res) => {
   }
 
   try {
-    const Deposit = require('../models/Deposit'); // Your deposit model
-    const Withdraw = require('../models/Withdraw'); // Your withdraw model
-
-    const depositCount = await Deposit.countDocuments({ status: 'pending' });
-    const withdrawCount = await Withdraw.countDocuments({ status: 'pending' });
+    const depositCount = await deposit.countDocuments({ status: 'pending' });
+    const withdrawCount = await withdraw.countDocuments({ status: 'pending' });
 
     res.json({
       ok: true,
@@ -97,10 +96,9 @@ router.get('/api/deposits', async (req, res) => {
   }
 
   try {
-    const Deposit = require('../models/Deposit');
     const limit = parseInt(req.query.limit) || 50;
 
-    const deposits = await Deposit.find({ status: 'pending' })
+    const deposits = await deposit.find({ status: 'pending' })
       .sort({ createdAt: -1 })
       .limit(limit + 1)
       .lean();
@@ -134,10 +132,9 @@ router.get('/api/withdraws', async (req, res) => {
   }
 
   try {
-    const Withdraw = require('../models/Withdraw');
     const limit = parseInt(req.query.limit) || 50;
 
-    const withdraws = await Withdraw.find({ status: 'pending' })
+    const withdraws = await withdraw.find({ status: 'pending' })
       .sort({ createdAt: -1 })
       .limit(limit + 1)
       .lean();
@@ -176,21 +173,20 @@ router.post('/api/deposits/:id/approve', async (req, res) => {
   }
 
   try {
-    const Deposit = require('../models/Deposit');
-    const deposit = await Deposit.findById(req.params.id);
+    const depositDoc = await deposit.findById(req.params.id);
 
-    if (!deposit || deposit.status !== 'pending') {
+    if (!depositDoc || depositDoc.status !== 'pending') {
       return res.json({ ok: false, error: 'NOT_FOUND' });
     }
 
-    deposit.status = 'approved';
-    deposit.processedBy = req.session.subadmin._id;
-    deposit.processedAt = new Date();
-    await deposit.save();
+    depositDoc.status = 'approved';
+    depositDoc.processedBy = req.session.subadmin._id;
+    depositDoc.processedAt = new Date();
+    await depositDoc.save();
 
-    const newBalance = (req.session.subadmin.balance || 0) + deposit.amount;
+    const newBalance = (req.session.subadmin.balance || 0) + depositDoc.amount;
     
-    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
+    await subadmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
     req.session.subadmin.balance = newBalance;
 
     res.json({ ok: true, newBalance });
@@ -213,19 +209,18 @@ router.post('/api/deposits/bulk-approve', async (req, res) => {
 
   try {
     const { ids } = req.body;
-    const Deposit = require('../models/Deposit');
 
-    const deposits = await Deposit.find({ _id: { $in: ids }, status: 'pending' });
+    const deposits = await deposit.find({ _id: { $in: ids }, status: 'pending' });
     
     const totalAmount = deposits.reduce((sum, d) => sum + d.amount, 0);
     
-    await Deposit.updateMany(
+    await deposit.updateMany(
       { _id: { $in: ids }, status: 'pending' },
       { status: 'approved', processedBy: req.session.subadmin._id, processedAt: new Date() }
     );
 
     const newBalance = (req.session.subadmin.balance || 0) + totalAmount;
-    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
+    await subadmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
     req.session.subadmin.balance = newBalance;
 
     res.json({ ok: true, approved: deposits.length, failed: ids.length - deposits.length, newBalance });
@@ -247,8 +242,7 @@ router.post('/api/deposits/:id/reject', async (req, res) => {
   }
 
   try {
-    const Deposit = require('../models/Deposit');
-    await Deposit.findByIdAndUpdate(req.params.id, {
+    await deposit.findByIdAndUpdate(req.params.id, {
       status: 'rejected',
       processedBy: req.session.subadmin._id,
       processedAt: new Date()
@@ -273,21 +267,20 @@ router.post('/api/withdraws/:id/approve', async (req, res) => {
   }
 
   try {
-    const Withdraw = require('../models/Withdraw');
-    const withdraw = await Withdraw.findById(req.params.id);
+    const withdrawDoc = await withdraw.findById(req.params.id);
 
-    if (!withdraw || withdraw.status !== 'pending') {
+    if (!withdrawDoc || withdrawDoc.status !== 'pending') {
       return res.json({ ok: false, error: 'NOT_FOUND' });
     }
 
-    withdraw.status = 'approved';
-    withdraw.processedBy = req.session.subadmin._id;
-    withdraw.processedAt = new Date();
-    await withdraw.save();
+    withdrawDoc.status = 'approved';
+    withdrawDoc.processedBy = req.session.subadmin._id;
+    withdrawDoc.processedAt = new Date();
+    await withdrawDoc.save();
 
-    const newBalance = (req.session.subadmin.balance || 0) - withdraw.amount;
+    const newBalance = (req.session.subadmin.balance || 0) - withdrawDoc.amount;
     
-    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
+    await subadmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
     req.session.subadmin.balance = newBalance;
 
     res.json({ ok: true, newBalance });
@@ -310,19 +303,18 @@ router.post('/api/withdraws/bulk-approve', async (req, res) => {
 
   try {
     const { ids } = req.body;
-    const Withdraw = require('../models/Withdraw');
 
-    const withdraws = await Withdraw.find({ _id: { $in: ids }, status: 'pending' });
+    const withdraws = await withdraw.find({ _id: { $in: ids }, status: 'pending' });
     
     const totalAmount = withdraws.reduce((sum, w) => sum + w.amount, 0);
     
-    await Withdraw.updateMany(
+    await withdraw.updateMany(
       { _id: { $in: ids }, status: 'pending' },
       { status: 'approved', processedBy: req.session.subadmin._id, processedAt: new Date() }
     );
 
     const newBalance = (req.session.subadmin.balance || 0) - totalAmount;
-    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
+    await subadmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
     req.session.subadmin.balance = newBalance;
 
     res.json({ ok: true, approved: withdraws.length, failed: ids.length - withdraws.length, newBalance });
@@ -344,8 +336,7 @@ router.post('/api/withdraws/:id/reject', async (req, res) => {
   }
 
   try {
-    const Withdraw = require('../models/Withdraw');
-    await Withdraw.findByIdAndUpdate(req.params.id, {
+    await withdraw.findByIdAndUpdate(req.params.id, {
       status: 'rejected',
       processedBy: req.session.subadmin._id,
       processedAt: new Date()
