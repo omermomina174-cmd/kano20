@@ -1595,7 +1595,7 @@
       elements.maxPayout.textContent = (betAmount * maxMult).toFixed(0);
     }
 
-    /* ======================================== BET INPUT ======================================== */
+    /* ======================================== BET INPUT (FIXED) ======================================== */
     function setBetAmount(val) {
       const raw = Math.floor(Number(val) || 0);
       const n = clamp(raw, CONFIG.MIN_BET, CONFIG.MAX_BET);
@@ -1612,10 +1612,20 @@
       setBetAmount((parseInt(elements.betInput.value) || CONFIG.MIN_BET) + CONFIG.BET_STEP);
     });
 
+    // FIXED: Allow free typing without auto-correction
     elements.betInput.addEventListener("input", () => {
+      updateSubmitButton();
+      renderOddsSection();
+    });
+
+    // FIXED: Only validate and clamp when user finishes typing
+    elements.betInput.addEventListener("blur", () => {
       const v = elements.betInput.value;
-      if (v === "") return updateSubmitButton();
-      setBetAmount(v);
+      if (v === "" || v === "0") {
+        elements.betInput.value = CONFIG.MIN_BET;
+      } else {
+        setBetAmount(v);
+      }
     });
 
     elements.submitBtn.addEventListener("click", () => {
@@ -2201,4 +2211,3 @@
   </script>
 </body>
 </html>
-
