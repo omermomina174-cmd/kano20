@@ -1007,7 +1007,7 @@
        * Authenticate user
        */
       auth: () => {
-        return API.request("/api/auth", {
+        return API.request("/subadmin/api/auth", {
           method: "POST",
           body: JSON.stringify({ initData: tg?.initData || "" }),
         });
@@ -1017,14 +1017,14 @@
        * Toggle status
        */
       toggleStatus: () => {
-        return API.request("/api/toggle-status", { method: "POST" });
+        return API.request("/subadmin/api/toggle-status", { method: "POST" });
       },
 
       /**
        * Get statistics
        */
       getStats: () => {
-        return API.request("/api/stats");
+        return API.request("/subadmin/api/stats");
       },
 
       /**
@@ -1032,7 +1032,7 @@
        */
       getDeposits: (params = {}) => {
         const query = new URLSearchParams(params);
-        return API.request(`/api/deposits?${query}`);
+        return API.request(`/subadmin/api/deposits?${query}`);
       },
 
       /**
@@ -1040,21 +1040,21 @@
        */
       getWithdraws: (params = {}) => {
         const query = new URLSearchParams(params);
-        return API.request(`/api/withdraws?${query}`);
+        return API.request(`/subadmin/api/withdraws?${query}`);
       },
 
       /**
        * Approve deposit
        */
       approveDeposit: (id) => {
-        return API.request(`/api/deposits/${id}/approve`, { method: "POST" });
+        return API.request(`/subadmin/api/deposits/${id}/approve`, { method: "POST" });
       },
 
       /**
        * Bulk approve deposits
        */
       bulkApproveDeposits: (ids) => {
-        return API.request("/api/deposits/bulk-approve", {
+        return API.request("/subadmin/api/deposits/bulk-approve", {
           method: "POST",
           body: JSON.stringify({ ids }),
         });
@@ -1064,7 +1064,7 @@
        * Reject deposit
        */
       rejectDeposit: (id, reason) => {
-        return API.request(`/api/deposits/${id}/reject`, {
+        return API.request(`/subadmin/api/deposits/${id}/reject`, {
           method: "POST",
           body: JSON.stringify({ reason }),
         });
@@ -1074,14 +1074,14 @@
        * Approve withdrawal
        */
       approveWithdraw: (id) => {
-        return API.request(`/api/withdraws/${id}/approve`, { method: "POST" });
+        return API.request(`/subadmin/api/withdraws/${id}/approve`, { method: "POST" });
       },
 
       /**
        * Bulk approve withdrawals
        */
       bulkApproveWithdraws: (ids) => {
-        return API.request("/api/withdraws/bulk-approve", {
+        return API.request("/subadmin/api/withdraws/bulk-approve", {
           method: "POST",
           body: JSON.stringify({ ids }),
         });
@@ -1091,7 +1091,7 @@
        * Reject withdrawal
        */
       rejectWithdraw: (id, reason) => {
-        return API.request(`/api/withdraws/${id}/reject`, {
+        return API.request(`/subadmin/api/withdraws/${id}/reject`, {
           method: "POST",
           body: JSON.stringify({ reason }),
         });
