@@ -38,7 +38,6 @@ const CACHE_CONFIG = {
   ADMIN_CACHE_MS: 30000,
   RATE_LIMIT_MS: 300,
   RATE_LIMIT_MAX_PER_MIN: 30,
-  BALANCE_SYNC_INTERVAL_MS: 10000,
 };
 
 const PAYOUT_TABLE = {
@@ -59,37 +58,43 @@ let io = null;
 let isInitialized = false;
 let isShuttingDown = false;
 
+// Game state
 let gamePhase = "betting";
 let countdown = GAME_CONFIG.BETTING_DURATION_SEC;
 let gameInterval = null;
 let isDrawing = false;
 
+// Round state
 let winningNumbers = [];
 let currentDrawIndex = 0;
 let currentGameId = null;
 let currentRoundTickets = new Map();
 let userRoundBetMinor = new Map();
 
+// Draw state
 let activeDrawBatch = null;
 let activeDrawFinished = null;
 let roundUserResult = new Map();
 
+// Timers
 let finishTimer = null;
 let newRoundTimer = null;
-let balanceSyncTimer = null;
 
+// Admin cache (RTP only)
 let cachedRtp = 70;
 let rtpCacheTime = 0;
 
+// Runtime state
 let runtimeUsers = new Map();
 let socketToTelegram = new Map();
 
+// Rate limiting
 let userRateLimit = new Map();
 
+// Locks for race condition prevention
 const userLock = new AsyncLock({ timeout: 5000 });
-const balanceLock = new AsyncLock({ timeout: 3000 });
 
-// ========== LOGGING HELPERS ==========
+// ========== SIMPLE LOGGING HELPERS ==========
 function formatMoney(minor) {
   return (minor / 100).toFixed(2);
 }
@@ -155,57 +160,6 @@ function checkRateLimit(telegramId) {
 
 function clearRateLimitCache() {
   userRateLimit.clear();
-}
-
-// ========== BALANCE SYNC HELPERS ==========
-async function syncBalanceToDb(telegramId) {
-  const ru = runtimeUsers.get(telegramId);
-  if (!ru) return;
-
-  try {
-    await balanceLock.acquire(telegramId, async () => {
-      const balanceToSync = fromMinor(ru.balanceMinor);
-      
-      await User.updateOne(
-        { telegramId },
-        { $set: { Balance: balanceToSync } }
-      );
-
-      console.log(`[BALANCE_SYNC] ${ru.username} synced: ${balanceToSync} Birr`);
-    });
-  } catch (err) {
-    console.error(`[BALANCE_SYNC] Failed for ${telegramId}:`, err.message);
-  }
-}
-
-async function syncAllBalancesToDb() {
-  if (runtimeUsers.size === 0) return;
-
-  const syncPromises = [];
-  for (const [telegramId] of runtimeUsers) {
-    syncPromises.push(syncBalanceToDb(telegramId));
-  }
-
-  try {
-    await Promise.allSettled(syncPromises);
-    console.log(`[BALANCE_SYNC] Batch sync completed for ${syncPromises.length} users`);
-  } catch (err) {
-    console.error("[BALANCE_SYNC] Batch sync error:", err.message);
-  }
-}
-
-function startBalanceSyncTimer() {
-  if (balanceSyncTimer) clearInterval(balanceSyncTimer);
-
-  balanceSyncTimer = setInterval(() => {
-    if (!isShuttingDown) {
-      syncAllBalancesToDb().catch(err => {
-        console.error("[BALANCE_SYNC] Timer error:", err.message);
-      });
-    }
-  }, CACHE_CONFIG.BALANCE_SYNC_INTERVAL_MS);
-
-  console.log(`[BALANCE_SYNC] Timer started - syncing every ${CACHE_CONFIG.BALANCE_SYNC_INTERVAL_MS / 1000}s`);
 }
 
 // ========== GAME ID GENERATOR ==========
@@ -496,7 +450,7 @@ async function cleanupOldTicketHistory(telegramIds) {
   }
 }
 
-// ========== DB OPERATIONS ==========
+// ========== DB OPERATIONS (BULK) ==========
 async function saveRoundToDb({
   drawIndex,
   gameId,
@@ -546,7 +500,7 @@ async function saveRoundToDb({
       { upsert: true, new: true }
     );
 
-    console.log(`[DB] Draw history saved - drawIndex: ${drawIndex}/${GAME_CONFIG.MAX_DRAW_HISTORY}, gameId: ${gameId}`);
+    console.log(`[DB] Draw history saved - drawIndex: ${drawIndex}/${GAME_CONFIG.MAX_DRAW_HISTORY}, gameId: ${gameId}, syntheticBets: ${syn.totalBets}, realBets: ${formatMoney(totalBetMinor)}, eatHour: ${syn.hourEAT}, day: ${getDayName(syn.dayOfWeek)}`);
   } catch (err) {
     console.error("[DB] Draw history save failed:", err.message);
   }
@@ -555,10 +509,13 @@ async function saveRoundToDb({
   const telegramIds = Array.from(currentRoundTickets.keys());
   await cleanupOldTicketHistory(telegramIds);
 
-  // 3) Bulk update tickets with results (NOT insert, UPDATE)
-  const bulkOps = [];
+  // 3) Bulk save Ticket History
+  const ticketDocs = [];
 
   for (const [telegramId, tickets] of currentRoundTickets) {
+    const ru = runtimeUsers.get(telegramId);
+    const username = ru?.username || "Player";
+
     for (const t of tickets) {
       const key = `${telegramId}:${t.id}`;
       const finalWinMinor = finalWinByTicketKeyMinor.get(key) || 0;
@@ -569,36 +526,64 @@ async function saveRoundToDb({
       const payoutRow = PAYOUT_TABLE[String(t.numbers.length)];
       const multiplier = payoutRow ? Number(payoutRow[String(matches)] || 0) : 0;
 
-      bulkOps.push({
-        updateOne: {
-          filter: { 
-            drawIndex,
-            telegramId,
-            ticketId: t.id
-          },
-          update: {
-            $set: {
-              drawnNumbers,
-              matchedNumbers: matchedNums,
-              matchedCount: matches,
-              winAmount: fromMinor(finalWinMinor),
-              netAmount: fromMinor(finalWinMinor - betMinor),
-              multiplier,
-              result: finalWinMinor > 0 ? "win" : "lose",
-              status: "completed"
-            }
-          }
-        }
+      ticketDocs.push({
+        drawIndex,
+        gameId,
+        telegramId,
+        username,
+        ticketId: t.id,
+        pickedNumbers: t.numbers,
+        matchedNumbers: matchedNums,
+        drawnNumbers,
+        pickedCount: t.numbers.length,
+        matchedCount: matches,
+        betAmount: t.betAmount,
+        winAmount: fromMinor(finalWinMinor),
+        netAmount: fromMinor(finalWinMinor - betMinor),
+        multiplier,
+        result: finalWinMinor > 0 ? "win" : "lose"
       });
     }
   }
 
-  if (bulkOps.length > 0) {
+  if (ticketDocs.length > 0) {
     try {
-      const result = await KanoTicketHistory.bulkWrite(bulkOps, { ordered: false });
-      console.log(`[DB] Ticket results updated: ${result.modifiedCount}/${bulkOps.length} tickets`);
+      await KanoTicketHistory.insertMany(ticketDocs, { ordered: false });
+      console.log(`[DB] Ticket history saved: ${ticketDocs.length} tickets (today only)`);
     } catch (err) {
-      console.error("[DB] Ticket results update failed:", err.message);
+      console.error("[DB] Ticket history save failed:", err.message);
+    }
+  }
+
+  // 4) Bulk update User balances
+  const balanceOps = [];
+
+  for (const [telegramId] of currentRoundTickets) {
+    const betMinor = userRoundBetMinor.get(telegramId) || 0;
+    let winMinor = 0;
+
+    const tickets = currentRoundTickets.get(telegramId) || [];
+    for (const t of tickets) {
+      const key = `${telegramId}:${t.id}`;
+      winMinor += finalWinByTicketKeyMinor.get(key) || 0;
+    }
+
+    const deltaMinor = winMinor - betMinor;
+
+    balanceOps.push({
+      updateOne: {
+        filter: { telegramId: String(telegramId) },
+        update: { $inc: { Balance: fromMinor(deltaMinor) } }
+      }
+    });
+  }
+
+  if (balanceOps.length > 0) {
+    try {
+      await User.bulkWrite(balanceOps, { ordered: false });
+      console.log(`[DB] User balances updated: ${balanceOps.length} users`);
+    } catch (err) {
+      console.error("[DB] User balance update failed:", err.message);
     }
   }
 
@@ -633,17 +618,11 @@ async function distributeRawWinnings() {
     }
   }
 
-  // Update in-memory balances and sync to DB immediately
   for (const [telegramId, winMinor] of winByUserMinor) {
     const ru = runtimeUsers.get(telegramId);
     if (ru) {
       ru.balanceMinor += winMinor;
       emitBalanceToUser(telegramId);
-      
-      // Sync to DB immediately
-      syncBalanceToDb(telegramId).catch(err => {
-        console.error(`[PAYOUT] Failed to sync balance for ${telegramId}:`, err.message);
-      });
     }
   }
 
@@ -846,17 +825,28 @@ async function gracefulShutdown(signal) {
     clearInterval(gameInterval);
     gameInterval = null;
   }
-  
-  if (balanceSyncTimer) {
-    clearInterval(balanceSyncTimer);
-    balanceSyncTimer = null;
-  }
-  
   clearRoundTimers();
 
   io.emit("serverShutdown", { message: "Server is restarting. Please reconnect shortly." });
 
-  await syncAllBalancesToDb();
+  const balanceOps = [];
+  for (const [telegramId, ru] of runtimeUsers) {
+    balanceOps.push({
+      updateOne: {
+        filter: { telegramId },
+        update: { $set: { Balance: fromMinor(ru.balanceMinor) } }
+      }
+    });
+  }
+
+  if (balanceOps.length > 0) {
+    try {
+      await User.bulkWrite(balanceOps, { ordered: false });
+      console.log(`[SHUTDOWN] Synced ${balanceOps.length} user balances to DB`);
+    } catch (err) {
+      console.error("[SHUTDOWN] Failed to sync balances:", err.message);
+    }
+  }
 
   io.close();
 
@@ -887,6 +877,7 @@ async function initSocket(server) {
     console.error("[UNHANDLED] Unhandled rejection:", String(reason));
   });
 
+  // Middleware: Session
   io.use((socket, next) => {
     const req = socket.request;
     const res = new http.ServerResponse(req);
@@ -897,12 +888,14 @@ async function initSocket(server) {
     });
   });
 
+  // Middleware: Init check
   io.use((socket, next) => {
     if (!isInitialized) return next(new Error("SERVER_STARTING"));
     if (isShuttingDown) return next(new Error("SERVER_SHUTDOWN"));
     next();
   });
 
+  // Middleware: Authentication
   io.use(async (socket, next) => {
     try {
       const sessUser = socket.request.session?.user;
@@ -931,10 +924,6 @@ async function initSocket(server) {
           balanceMinor: toMinor(user.Balance),
           sockets: new Set()
         });
-      } else {
-        const ru = runtimeUsers.get(telegramId);
-        ru.balanceMinor = toMinor(user.Balance);
-        ru.username = user.username || "Player";
       }
 
       const ru = runtimeUsers.get(telegramId);
@@ -948,6 +937,7 @@ async function initSocket(server) {
     }
   });
 
+  // Connection handler
   io.on("connection", (socket) => {
     const { telegramId, username } = socket.user;
     const ru = runtimeUsers.get(telegramId);
@@ -974,6 +964,7 @@ async function initSocket(server) {
       socket.emit("myRoundResult", roundUserResult.get(telegramId));
     }
 
+    // Ticket picking with race condition protection
     socket.on("pickTicket", async (data) => {
       const rateCheck = checkRateLimit(telegramId);
       if (!rateCheck.allowed) {
@@ -1035,7 +1026,6 @@ async function initSocket(server) {
               `Maximum ${GAME_CONFIG.MAX_TICKETS_PER_USER} tickets per round`);
           }
 
-          // Deduct balance
           ru.balanceMinor -= betMinor;
           userRoundBetMinor.set(telegramId, (userRoundBetMinor.get(telegramId) || 0) + betMinor);
 
@@ -1049,36 +1039,6 @@ async function initSocket(server) {
           userTickets.push(ticket);
           currentRoundTickets.set(telegramId, userTickets);
 
-          // **SAVE TICKET TO DB IMMEDIATELY WITH STATUS "pending"**
-          const nextDrawIndex = getNextDrawIndex(currentDrawIndex);
-          const nextGameId = currentGameId || await generateUniqueGameId();
-          
-          try {
-            await KanoTicketHistory.create({
-              drawIndex: nextDrawIndex,
-              gameId: nextGameId,
-              telegramId,
-              username: ru.username,
-              ticketId: ticket.id,
-              pickedNumbers: ticket.numbers,
-              matchedNumbers: [], // Will be filled after draw
-              drawnNumbers: [], // Will be filled after draw
-              pickedCount: ticket.numbers.length,
-              matchedCount: 0, // Will be filled after draw
-              betAmount: ticket.betAmount,
-              winAmount: 0, // Will be filled after draw
-              netAmount: -ticket.betAmount, // Negative until win
-              multiplier: 0, // Will be filled after draw
-              result: "pending", // Status: pending
-              status: "pending"
-            });
-
-            console.log(`[TICKET_DB] Saved ticket#${ticket.id} for ${username} - drawIndex: ${nextDrawIndex}`);
-          } catch (err) {
-            console.error(`[TICKET_DB] Failed to save ticket:`, err.message);
-            // Continue anyway - ticket is in memory
-          }
-
           socket.emit("ticketConfirmed", {
             ticket,
             newBalance: fromMinor(ru.balanceMinor)
@@ -1086,11 +1046,6 @@ async function initSocket(server) {
 
           emitBalanceToUser(telegramId);
           emitTicketsToUser(telegramId);
-
-          // Sync balance to DB immediately
-          syncBalanceToDb(telegramId).catch(err => {
-            console.error(`[TICKET] Failed to sync balance for ${telegramId}:`, err.message);
-          });
 
           console.log(`[TICKET] ${username} ticket#${ticket.id} - picks: ${ticket.numbers.length}, bet: ${betAmount}, roundTotal: ${formatMoney(getTotalRoundBetMinor())}`);
         });
@@ -1104,6 +1059,7 @@ async function initSocket(server) {
       }
     });
 
+    // Disconnect handler
     socket.on("disconnect", () => {
       const tid = socketToTelegram.get(socket.id);
       socketToTelegram.delete(socket.id);
@@ -1111,15 +1067,20 @@ async function initSocket(server) {
       if (tid && runtimeUsers.has(tid)) {
         const u = runtimeUsers.get(tid);
         u.sockets.delete(socket.id);
+        
+        if (u.sockets.size === 0) {
+          runtimeUsers.delete(tid);
+        }
       }
 
       console.log(`[DISCONNECT] ${username} (${telegramId}) | Online: ${runtimeUsers.size}`);
     });
   });
 
+  // Start game loop
   startGameLoop();
-  startBalanceSyncTimer();
   
+  // Periodic cleanup (every 5 minutes)
   setInterval(() => {
     for (const [sid, tid] of socketToTelegram) {
       if (!io.sockets.sockets.has(sid)) {
@@ -1127,6 +1088,9 @@ async function initSocket(server) {
         const ru = runtimeUsers.get(tid);
         if (ru) {
           ru.sockets.delete(sid);
+          if (ru.sockets.size === 0) {
+            runtimeUsers.delete(tid);
+          }
         }
       }
     }
