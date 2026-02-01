@@ -1765,7 +1765,6 @@
         return;
       }
 
-      // Sort by drawIndex descending (most recent first) and take only closest 20
       const sorted = state.drawHistoryDb.slice().sort((a, b) => (b.drawIndex || 0) - (a.drawIndex || 0));
       const displayDraws = sorted.slice(0, 20);
 
@@ -2089,8 +2088,11 @@
       showModal("Server Restarting", payload?.message || "Please reconnect shortly.");
     });
 
+    // **FIXED: Added userData listener**
     socket.on("userData", (data) => {
-      updateBalance(data.balance);
+      if (data?.balance != null) {
+        updateBalance(data.balance);
+      }
     });
 
     socket.on("myRoundTickets", (tickets) => {
