@@ -5,7 +5,7 @@ const Withdraw = require("../models/withdraw");
 const SubAdmin = require("../models/subadmin");
 
 /* ═══════════════════════════════════════════
-   ⚙️ CONFIGURATION
+⚙️ CONFIGURATION
 ═══════════════════════════════════════════ */
 
 const CONFIG = {
@@ -15,7 +15,7 @@ const CONFIG = {
 };
 
 /* ═══════════════════════════════════════════
-   🎨 KEYBOARDS
+🎨 KEYBOARDS
 ═══════════════════════════════════════════ */
 
 const Keyboards = {
@@ -38,7 +38,7 @@ const Keyboards = {
 };
 
 /* ═══════════════════════════════════════════
-   🔧 UTILITY FUNCTIONS
+🔧 UTILITY FUNCTIONS
 ═══════════════════════════════════════════ */
 
 const Utils = {
@@ -98,7 +98,7 @@ const Utils = {
 };
 
 /* ═══════════════════════════════════════════
-   👨‍💼 SUBADMIN SERVICE
+👨‍💼 SUBADMIN SERVICE
 ═══════════════════════════════════════════ */
 
 const SubAdminService = {
@@ -122,12 +122,12 @@ const SubAdminService = {
 };
 
 /* ═══════════════════════════════════════════
-   💬 MESSAGE TEMPLATES (Clean & Simple)
+💬 MESSAGE TEMPLATES (Clean & Simple)
 ═══════════════════════════════════════════ */
 
 const Messages = {
   pendingExists: () =>
-`⏳ *Withdrawal Pending*
+    `⏳ Withdrawal Pending
 
 You have a pending withdrawal request.
 Please wait for approval or rejection.
@@ -136,14 +136,14 @@ Please wait for approval or rejection.
 እባክዎ ይጠብቁ።`,
 
   cancelled: () =>
-`❌ *Cancelled*
+    `❌ Cancelled
 
 Type /withdraw to start again.
 
 ተሰርዟል።`,
 
   balanceTooLow: (balance) =>
-`⚠️ *Insufficient Balance*
+    `⚠️ Insufficient Balance
 
 Your balance: ${Utils.formatNumber(balance)} ብር
 Minimum required: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
@@ -151,7 +151,7 @@ Minimum required: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
 ሚዛንዎ በቂ አይደለም።`,
 
   noActiveSubAdmin: () =>
-`⏸️ *Withdraw Unavailable*
+    `⏸️ Withdraw Unavailable
 
 Withdraw system is not available this time.
 Please wait and try again later.
@@ -160,7 +160,7 @@ Please wait and try again later.
 እባክዎ ቆይተው ይሞክሩ።`,
 
   askPhone: () =>
-`💸 *Withdraw Funds*
+    `💸 Withdraw Funds
 ገንዘብ ያውጡ
 
 📊 Limits: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} - ${Utils.formatNumber(CONFIG.MAX_WITHDRAW)} ብር
@@ -175,7 +175,7 @@ Example: \`0912345678\`
 ❌ Type /cancel to exit`,
 
   invalidPhone: () =>
-`⚠️ *Invalid Phone Number*
+    `⚠️ Invalid Phone Number
 
 Valid formats:
 • \`0912345678\`
@@ -185,7 +185,7 @@ Valid formats:
 የተሳሳተ ቁጥር - እንደገና ይሞክሩ`,
 
   askName: (phone) =>
-`👤 *Account Name*
+    `👤 Account Name
 የመለያ ስም
 
 📱 Phone: \`${Utils.formatPhoneDisplay(phone)}\`
@@ -202,7 +202,7 @@ Example: \`Abebe Kebede\`
 ❌ Type /cancel to exit`,
 
   invalidName: () =>
-`⚠️ *Invalid Name*
+    `⚠️ Invalid Name
 
 Please enter a valid name.
 
@@ -211,7 +211,7 @@ Example: \`Abebe\` or \`Abebe Kebede\`
 የተሳሳተ ስም`,
 
   askAmount: (phone, name, balance) =>
-`💰 *Enter Amount*
+    `💰 Enter Amount
 መጠን ያስገቡ
 
 📱 Phone: \`${Utils.formatPhoneDisplay(phone)}\`
@@ -219,10 +219,10 @@ Example: \`Abebe\` or \`Abebe Kebede\`
 
 ━━━━━━━━━━━━━━━━━━━━
 
-💵 *Available Balance:* ${Utils.formatNumber(balance)} ብር
+💵 Available Balance: ${Utils.formatNumber(balance)} ብር
 
-📊 *Minimum:* ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
-📊 *Maximum:* ${Utils.formatNumber(CONFIG.MAX_WITHDRAW)} ብር
+📊 Minimum: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
+📊 Maximum: ${Utils.formatNumber(CONFIG.MAX_WITHDRAW)} ብር
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -231,7 +231,7 @@ Example: \`500\` or \`1000\`
 ❌ Type /cancel to exit`,
 
   invalidAmount: () =>
-`⚠️ *Invalid Amount*
+    `⚠️ Invalid Amount
 
 Please enter a valid number.
 
@@ -240,28 +240,28 @@ Example: \`500\` or \`1000\`
 የተሳሳተ መጠን`,
 
   amountTooLow: () =>
-`⚠️ *Amount Too Low*
+    `⚠️ Amount Too Low
 
 Minimum: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
 
 መጠኑ በጣም ዝቅተኛ ነው`,
 
   amountTooHigh: () =>
-`⚠️ *Amount Too High*
+    `⚠️ Amount Too High
 
 Maximum: ${Utils.formatNumber(CONFIG.MAX_WITHDRAW)} ብር
 
 መጠኑ በጣም ከፍተኛ ነው`,
 
   accountBlocked: () =>
-`🚫 *Account Blocked*
+    `🚫 Account Blocked
 
 Your account is blocked. Contact support.
 
 መለያዎ ታግዷል።`,
 
   insufficientBalance: (balance) =>
-`❌ *Insufficient Balance*
+    `❌ Insufficient Balance
 
 Your balance: ${Utils.formatNumber(balance)} ብር
 
@@ -270,7 +270,7 @@ The amount exceeds your balance.
 ሚዛንዎ በቂ አይደለም`,
 
   success: (amount, phone, firstName) =>
-`✅ *Withdrawal Submitted!*
+    `✅ Withdrawal Submitted!
 ጥያቄዎ ተልኳል!
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -285,7 +285,7 @@ The amount exceeds your balance.
 በቅርብ ጊዜ እንገመግማለን ✨`,
 
   error: () =>
-`❌ *Error*
+    `❌ Error
 
 Something went wrong. Try again.
 
@@ -293,7 +293,7 @@ Something went wrong. Try again.
 };
 
 /* ═══════════════════════════════════════════
-   🧹 CLEANUP
+🧹 CLEANUP
 ═══════════════════════════════════════════ */
 
 async function cleanupOldWithdrawals() {
@@ -314,7 +314,7 @@ async function cleanupOldWithdrawals() {
 }
 
 /* ═══════════════════════════════════════════
-   🎮 MAIN HANDLERS
+🎮 MAIN HANDLERS
 ═══════════════════════════════════════════ */
 
 async function startWithdraw(bot, msg, user, safeSend) {
@@ -495,12 +495,13 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
         return true;
       }
 
-      // ✅ DEDUCT BALANCE (Atomic operation)
+      // ✅ DEDUCT BALANCE FROM USER ACCOUNT (This reduces user's balance by the withdrawal amount)
       const deductResult = await User.updateOne(
-        { telegramId, Balance: { $gte: amount } },
-        { $inc: { Balance: -amount } }
+        { telegramId, Balance: { $gte: amount } }, // Ensure balance is sufficient
+        { $inc: { Balance: -amount } } // Subtract the amount from user's balance
       );
 
+      // Check if deduction was successful
       if (!deductResult || deductResult.modifiedCount !== 1) {
         const freshUser = await User.findOne({ telegramId }, { Balance: 1 }).lean();
         await safeSend(
@@ -511,7 +512,7 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
         return true;
       }
 
-      // ✅ SUBMIT WITHDRAW
+      // ✅ SUBMIT WITHDRAW REQUEST AS PENDING
       try {
         await Withdraw.updateOne(
           { _id: session._id, status: "session" },
@@ -526,6 +527,7 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
           }
         );
 
+        // Send success message to user
         await safeSend(
           chatId,
           Messages.success(
@@ -538,7 +540,7 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
 
         return true;
       } catch (error) {
-        // ⚠️ ROLLBACK on error
+        // ⚠️ ROLLBACK BALANCE IF ERROR OCCURS (Add the amount back to user's balance)
         await User.updateOne({ telegramId }, { $inc: { Balance: amount } });
         throw error;
       }
@@ -558,7 +560,7 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
 }
 
 /* ═══════════════════════════════════════════
-   📤 EXPORTS
+📤 EXPORTS
 ═══════════════════════════════════════════ */
 
 module.exports = {
