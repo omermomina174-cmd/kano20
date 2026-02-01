@@ -44,17 +44,14 @@ const UserSchema = new mongoose.Schema(
        💰 BALANCE (2 decimal places, rounded)
        ✅ POSITIVE ONLY (min: 0)
     ───────────────────────────────────── */
-    Balance: {
+  // In user.js model
+Balance: {
   type: Number,
   default: 0,
   min: [0, "Balance cannot be negative"],
-  set: (v) => {
-    const num = Number(v) || 0;
-    return Math.round(num * 100) / 100; // ✅ Allow negative for $inc
-  },
+  set: (v) => Math.round((Number(v) || 0) * 100) / 100, // ✅ Removed Math.max
   get: (v) => Math.round((Number(v) || 0) * 100) / 100,
 },
-
     /* ─────────────────────────────────────
        🛡️ ROLE / STATUS
     ───────────────────────────────────── */
