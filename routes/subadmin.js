@@ -1,805 +1,359 @@
-"use strict";
-
-const express = require("express");
-const path = require("path");
-const mongoose = require("mongoose");
+const express = require('express');
 const router = express.Router();
+const path = require('path');
+const SubAdmin = require('../models/SubAdmin'); // Your model
 
-const User = require("../models/user");
-const SubAdmin = require("../models/subadmin");
-const Deposit = require("../models/deposit");
-const Withdraw = require("../models/withdraw");
-
-const { requireTelegramInitData } = require("../utils/telegramWebApp");
-const { requireSubadminSession } = require("../middleware/requireSession");
-
-router.use(express.json({ limit: "256kb" }));
-
-/* ═══════════════════════════════════════════════════════════════
-   🔧 UTILITY FUNCTIONS
-═══════════════════════════════════════════════════════════════ */
-
-/**
- * Format amount to 2 decimal places
- */
-const formatAmount = (n) => Number(n || 0).toFixed(2);
-
-/**
- * Round balance to 2 decimal places
- */
-const roundBalance = (value) => Math.round((Number(value) || 0) * 100) / 100;
-
-/**
- * Validate MongoDB ObjectId
- */
-const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
-
-/**
- * Check if subadmin is in active status
- */
-const isActiveStatus = (status) => String(status || "").toLowerCase() === "active";
-
-/**
- * Send Telegram notification
- */
-async function sendTelegramMessage(chatId, text) {
-  const token = process.env.TELEGRAM_BOT_TOKEN_USER || process.env.BOT_TOKEN;
-  if (!token || !chatId) return false;
-
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
-    });
-    return res.ok;
-  } catch (e) {
-    console.error("[TELEGRAM] Send failed:", e?.message);
-    return false;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   📄 SERVE HTML PAGE
-═══════════════════════════════════════════════════════════════ */
-
-router.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "subadmin.html"));
+// ═══════════════════════════════════════════════════════════════
+// SERVE HTML PAGE
+// ═══════════════════════════════════════════════════════════════
+router.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/subadmin.html'));
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   🔐 AUTHENTICATION
-═══════════════════════════════════════════════════════════════ */
-
-router.post(
-  "/api/auth",
-  requireTelegramInitData("TELEGRAM_BOT_TOKEN_SUBADMIN"),
-  async (req, res) => {
-    try {
-      const telegramId = String(req.tgUser?.id || "");
-      
-      if (!telegramId) {
-        return res.status(403).json({ ok: false, error: "INVALID_TELEGRAM_DATA" });
-      }
-
-      const subadmin = await SubAdmin.findOne({ telegramId }).lean();
-
-      if (!subadmin) {
-        return res.status(403).json({ ok: false, error: "NOT_SUBADMIN" });
-      }
-
-      if (String(subadmin.status || "").toLowerCase() === "blocked") {
-        return res.status(403).json({ ok: false, error: "BLOCKED" });
-      }
-
-      // Set session
-      req.session.subadmin = {
-        id: String(subadmin._id),
-        telegramId,
-        role: subadmin.role || "subadmin",
-        username: subadmin.username || req.tgUser.username || "",
-      };
-
-      return res.json({
-        ok: true,
-        subadmin: {
-          id: String(subadmin._id),
-          username: subadmin.username || req.tgUser.first_name || "SubAdmin",
-          status: subadmin.status || "active",
-          balance: roundBalance(subadmin.balance || 0),
-        },
-      });
-    } catch (err) {
-      console.error("[AUTH] Error:", err);
-      return res.status(500).json({ ok: false, error: "AUTH_FAIL" });
-    }
-  }
-);
-
-/* ═══════════════════════════════════════════════════════════════
-   🔄 STATUS TOGGLE
-═══════════════════════════════════════════════════════════════ */
-
-router.post("/api/toggle-status", requireSubadminSession, async (req, res) => {
+// ═══════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/auth', async (req, res) => {
   try {
-    const subadminId = req.session?.subadmin?.id;
+    // Your existing auth logic here
+    const subadmin = req.session.subadmin || await yourAuthFunction(req.body.initData);
     
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-    }
-
-    const subadmin = await SubAdmin.findById(subadminId).select("status").lean();
-
     if (!subadmin) {
-      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
+      return res.json({ ok: false, error: 'AUTH_FAILED' });
     }
 
-    const currentStatus = String(subadmin.status || "active").toLowerCase();
-    const newStatus = currentStatus === "active" ? "sleep" : "active";
-
-    await SubAdmin.findByIdAndUpdate(subadminId, { $set: { status: newStatus } });
-
-    return res.json({ ok: true, status: newStatus });
-  } catch (err) {
-    console.error("[TOGGLE_STATUS] Error:", err);
-    return res.status(500).json({ ok: false, error: "TOGGLE_FAIL" });
-  }
-});
-
-/* ═══════════════════════════════════════════════════════════════
-   📊 STATISTICS
-═══════════════════════════════════════════════════════════════ */
-
-router.get("/api/stats", requireSubadminSession, async (req, res) => {
-  try {
-    const subadminId = req.session?.subadmin?.id;
+    req.session.subadmin = subadmin;
     
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-    }
-
-    const [depositStats, withdrawStats, subadmin] = await Promise.all([
-      Deposit.aggregate([
-        { $match: { status: "pending" } },
-        { $group: { _id: null, count: { $sum: 1 }, total: { $sum: "$amount" } } },
-      ]),
-      Withdraw.aggregate([
-        { $match: { status: "pending" } },
-        { $group: { _id: null, count: { $sum: 1 }, total: { $sum: "$amount" } } },
-      ]),
-      SubAdmin.findById(subadminId).select("balance status").lean(),
-    ]);
-
-    return res.json({
+    res.json({
       ok: true,
-      deposits: {
-        count: depositStats[0]?.count || 0,
-        total: depositStats[0]?.total || 0,
-      },
-      withdraws: {
-        count: withdrawStats[0]?.count || 0,
-        total: withdrawStats[0]?.total || 0,
-      },
-      balance: roundBalance(subadmin?.balance || 0),
-      status: subadmin?.status || "active",
+      subadmin: {
+        id: subadmin.id || subadmin._id,
+        username: subadmin.username,
+        first_name: subadmin.first_name,
+        balance: subadmin.balance || 0,
+        status: subadmin.status || 'active'
+      }
     });
-  } catch (err) {
-    console.error("[STATS] Error:", err);
-    return res.status(500).json({ ok: false, error: "STATS_FAIL" });
+  } catch (error) {
+    console.error('Auth error:', error);
+    res.json({ ok: false, error: 'AUTH_FAILED' });
   }
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   💰 BALANCE
-═══════════════════════════════════════════════════════════════ */
+// ═══════════════════════════════════════════════════════════════
+// TOGGLE STATUS
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/toggle-status', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
 
-router.get("/api/balance", requireSubadminSession, async (req, res) => {
   try {
-    const subadminId = req.session?.subadmin?.id;
+    const newStatus = req.session.subadmin.status === 'active' ? 'sleep' : 'active';
     
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-    }
-
-    const subadmin = await SubAdmin.findById(subadminId).select("balance status").lean();
-
-    if (!subadmin) {
-      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-    }
-
-    return res.json({
-      ok: true,
-      balance: roundBalance(subadmin.balance || 0),
-      status: subadmin.status || "active",
-    });
-  } catch (err) {
-    console.error("[BALANCE] Error:", err);
-    return res.status(500).json({ ok: false, error: "BALANCE_FAIL" });
+    // Update in database
+    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { status: newStatus });
+    
+    req.session.subadmin.status = newStatus;
+    res.json({ ok: true, status: newStatus });
+  } catch (error) {
+    res.json({ ok: false, error: 'UPDATE_FAILED' });
   }
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   💳 DEPOSITS - LIST
-═══════════════════════════════════════════════════════════════ */
+// ═══════════════════════════════════════════════════════════════
+// GET STATS
+// ═══════════════════════════════════════════════════════════════
+router.get('/api/stats', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
 
-router.get("/api/deposits", requireSubadminSession, async (req, res) => {
   try {
-    const { cursor, limit = 50 } = req.query;
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 50));
+    const Deposit = require('../models/Deposit'); // Your deposit model
+    const Withdraw = require('../models/Withdraw'); // Your withdraw model
 
-    const query = { status: "pending" };
-    if (cursor && isValidObjectId(cursor)) {
-      query._id = { $gt: cursor };
-    }
+    const depositCount = await Deposit.countDocuments({ status: 'pending' });
+    const withdrawCount = await Withdraw.countDocuments({ status: 'pending' });
 
-    const deposits = await Deposit.find(query)
-      .sort({ createdAt: 1, _id: 1 })
-      .limit(limitNum)
+    res.json({
+      ok: true,
+      balance: req.session.subadmin.balance || 0,
+      status: req.session.subadmin.status || 'active',
+      deposits: { count: depositCount },
+      withdraws: { count: withdrawCount }
+    });
+  } catch (error) {
+    res.json({ ok: false, error: 'DATABASE_ERROR' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// GET DEPOSITS
+// ═══════════════════════════════════════════════════════════════
+router.get('/api/deposits', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
+
+  try {
+    const Deposit = require('../models/Deposit');
+    const limit = parseInt(req.query.limit) || 50;
+
+    const deposits = await Deposit.find({ status: 'pending' })
+      .sort({ createdAt: -1 })
+      .limit(limit + 1)
       .lean();
 
-    const lastItem = deposits[deposits.length - 1];
-    const totalCount = await Deposit.countDocuments({ status: "pending" });
+    const hasMore = deposits.length > limit;
+    const items = hasMore ? deposits.slice(0, limit) : deposits;
 
-    return res.json({
+    res.json({
       ok: true,
-      items: deposits.map((d) => ({
-        id: String(d._id),
-        telegramId: d.telegramId || "",
-        chatId: d.chatId || "",
-        senderPhone: d.senderPhone || "",
-        amount: Number(d.amount) || 0,
-        createdAt: d.createdAt || new Date(),
+      items: items.map(d => ({
+        id: d._id.toString(),
+        senderPhone: d.senderPhone,
+        amount: d.amount,
+        status: d.status,
+        createdAt: d.createdAt
       })),
-      hasMore: deposits.length === limitNum,
-      nextCursor: lastItem ? String(lastItem._id) : null,
-      totalCount,
+      hasMore,
+      nextCursor: hasMore ? items[items.length - 1].createdAt : null
     });
-  } catch (err) {
-    console.error("[DEPOSITS_FETCH] Error:", err);
-    return res.status(500).json({ ok: false, error: "FETCH_FAIL" });
+  } catch (error) {
+    res.json({ ok: false, error: 'DATABASE_ERROR' });
   }
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   💸 WITHDRAWALS - LIST
-═══════════════════════════════════════════════════════════════ */
+// ═══════════════════════════════════════════════════════════════
+// GET WITHDRAWS
+// ═══════════════════════════════════════════════════════════════
+router.get('/api/withdraws', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
 
-router.get("/api/withdraws", requireSubadminSession, async (req, res) => {
   try {
-    const { cursor, limit = 50 } = req.query;
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 50));
+    const Withdraw = require('../models/Withdraw');
+    const limit = parseInt(req.query.limit) || 50;
 
-    const query = { status: "pending" };
-    if (cursor && isValidObjectId(cursor)) {
-      query._id = { $gt: cursor };
-    }
-
-    const withdraws = await Withdraw.find(query)
-      .sort({ createdAt: 1, _id: 1 })
-      .limit(limitNum)
+    const withdraws = await Withdraw.find({ status: 'pending' })
+      .sort({ createdAt: -1 })
+      .limit(limit + 1)
       .lean();
 
-    const lastItem = withdraws[withdraws.length - 1];
-    const totalCount = await Withdraw.countDocuments({ status: "pending" });
+    const hasMore = withdraws.length > limit;
+    const items = hasMore ? withdraws.slice(0, limit) : withdraws;
 
-    return res.json({
+    res.json({
       ok: true,
-      items: withdraws.map((w) => ({
-        id: String(w._id),
-        telegramId: w.telegramId || "",
-        chatId: w.chatId || "",
-        receiverPhone: w.receiverPhone || "",
-        receiverFirstName: w.receiverFirstName || "",
-        amount: Number(w.amount) || 0,
-        createdAt: w.createdAt || new Date(),
+      items: items.map(w => ({
+        id: w._id.toString(),
+        receiverPhone: w.receiverPhone,
+        receiverFirstName: w.receiverFirstName,
+        amount: w.amount,
+        status: w.status,
+        createdAt: w.createdAt
       })),
-      hasMore: withdraws.length === limitNum,
-      nextCursor: lastItem ? String(lastItem._id) : null,
-      totalCount,
+      hasMore,
+      nextCursor: hasMore ? items[items.length - 1].createdAt : null
     });
-  } catch (err) {
-    console.error("[WITHDRAWS_FETCH] Error:", err);
-    return res.status(500).json({ ok: false, error: "FETCH_FAIL" });
+  } catch (error) {
+    res.json({ ok: false, error: 'DATABASE_ERROR' });
   }
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   ✅ APPROVE DEPOSIT (Single)
-═══════════════════════════════════════════════════════════════ */
+// ═══════════════════════════════════════════════════════════════
+// APPROVE DEPOSIT
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/deposits/:id/approve', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
 
-router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res) => {
-  const session = await mongoose.startSession();
+  if (req.session.subadmin.status !== 'active') {
+    return res.json({ ok: false, error: 'SLEEP_MODE' });
+  }
 
   try {
-    const { id } = req.params;
-    const subadminId = req.session?.subadmin?.id;
+    const Deposit = require('../models/Deposit');
+    const deposit = await Deposit.findById(req.params.id);
 
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
+    if (!deposit || deposit.status !== 'pending') {
+      return res.json({ ok: false, error: 'NOT_FOUND' });
     }
 
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({ ok: false, error: "INVALID_ID" });
-    }
+    deposit.status = 'approved';
+    deposit.processedBy = req.session.subadmin._id;
+    deposit.processedAt = new Date();
+    await deposit.save();
 
-    const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
-    if (!subadminCheck) {
-      return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
-    }
+    const newBalance = (req.session.subadmin.balance || 0) + deposit.amount;
+    
+    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
+    req.session.subadmin.balance = newBalance;
 
-    if (!isActiveStatus(subadminCheck.status)) {
-      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
-    }
-
-    let result = { deposit: null, user: null, subadmin: null };
-
-    await session.withTransaction(async () => {
-      const deposit = await Deposit.findOneAndUpdate(
-        { _id: id, status: "pending" },
-        {
-          $set: {
-            status: "approved",
-            approvedBy: subadminId,
-            approvedAt: new Date(),
-          },
-        },
-        { new: true, session }
-      );
-
-      if (!deposit) {
-        throw new Error("NOT_FOUND");
-      }
-
-      const user = await User.findOneAndUpdate(
-        { telegramId: deposit.telegramId },
-        { $inc: { Balance: deposit.amount } },
-        { new: true, session }
-      );
-
-      if (!user) {
-        throw new Error("USER_NOT_FOUND");
-      }
-
-      const subadmin = await SubAdmin.findByIdAndUpdate(
-        subadminId,
-        { $inc: { balance: roundBalance(deposit.amount) } },
-        { new: true, session }
-      );
-
-      if (!subadmin) {
-        throw new Error("SUBADMIN_NOT_FOUND");
-      }
-
-      result = { deposit, user, subadmin };
-    });
-
-    // Send notification
-    if (result.deposit?.chatId) {
-      sendTelegramMessage(
-        result.deposit.chatId,
-        `✅ <b>Deposit Approved!</b>\n\n💰 Amount: <b>${formatAmount(result.deposit.amount)} Birr</b>\n💵 New Balance: <b>${formatAmount(result.user?.Balance || 0)} Birr</b>\n\n🎮 Ready to play!`
-      );
-    }
-
-    return res.json({
-      ok: true,
-      id,
-      newBalance: roundBalance(result.subadmin?.balance || 0),
-    });
-  } catch (err) {
-    console.error("[APPROVE_DEPOSIT] Error:", err);
-    return res.status(400).json({ ok: false, error: err.message || "APPROVE_FAIL" });
-  } finally {
-    session.endSession();
+    res.json({ ok: true, newBalance });
+  } catch (error) {
+    res.json({ ok: false, error: 'UPDATE_FAILED' });
   }
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   ✅ BULK APPROVE DEPOSITS
-═══════════════════════════════════════════════════════════════ */
+// ═══════════════════════════════════════════════════════════════
+// BULK APPROVE DEPOSITS
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/deposits/bulk-approve', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
 
-router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, res) => {
-  const session = await mongoose.startSession();
+  if (req.session.subadmin.status !== 'active') {
+    return res.json({ ok: false, error: 'SLEEP_MODE' });
+  }
 
   try {
     const { ids } = req.body;
-    const subadminId = req.session?.subadmin?.id;
+    const Deposit = require('../models/Deposit');
 
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-    }
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ ok: false, error: "INVALID_IDS" });
-    }
-
-    const validIds = ids.filter(isValidObjectId);
-    if (validIds.length === 0) {
-      return res.status(400).json({ ok: false, error: "NO_VALID_IDS" });
-    }
-
-    const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
-    if (!subadminCheck) {
-      return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
-    }
-
-    if (!isActiveStatus(subadminCheck.status)) {
-      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
-    }
-
-    let result = { approved: 0, failed: 0, totalAmount: 0, newBalance: 0 };
-
-    await session.withTransaction(async () => {
-      for (const id of validIds) {
-        try {
-          const deposit = await Deposit.findOneAndUpdate(
-            { _id: id, status: "pending" },
-            {
-              $set: {
-                status: "approved",
-                approvedBy: subadminId,
-                approvedAt: new Date(),
-              },
-            },
-            { new: true, session }
-          );
-
-          if (!deposit) {
-            result.failed++;
-            continue;
-          }
-
-          const user = await User.findOneAndUpdate(
-            { telegramId: deposit.telegramId },
-            { $inc: { Balance: deposit.amount } },
-            { new: true, session }
-          );
-
-          if (!user) {
-            result.failed++;
-            continue;
-          }
-
-          result.totalAmount += deposit.amount;
-          result.approved++;
-
-          // Send notification
-          if (deposit.chatId) {
-            sendTelegramMessage(
-              deposit.chatId,
-              `✅ <b>Deposit Approved!</b>\n\n💰 Amount: <b>${formatAmount(deposit.amount)} Birr</b>\n💵 New Balance: <b>${formatAmount(user.Balance || 0)} Birr</b>\n\n🎮 Ready to play!`
-            );
-          }
-        } catch (err) {
-          console.error(`[BULK_APPROVE_DEPOSIT] Failed for ${id}:`, err);
-          result.failed++;
-        }
-      }
-
-      const subadmin = await SubAdmin.findByIdAndUpdate(
-        subadminId,
-        { $inc: { balance: roundBalance(result.totalAmount) } },
-        { new: true, session }
-      );
-
-      if (!subadmin) {
-        throw new Error("SUBADMIN_NOT_FOUND");
-      }
-
-      result.newBalance = roundBalance(subadmin.balance || 0);
-    });
-
-    return res.json({ ok: true, ...result });
-  } catch (err) {
-    console.error("[BULK_APPROVE_DEPOSITS] Error:", err);
-    return res.status(400).json({ ok: false, error: err.message || "BULK_APPROVE_FAIL" });
-  } finally {
-    session.endSession();
-  }
-});
-
-/* ═══════════════════════════════════════════════════════════════
-   ❌ REJECT DEPOSIT
-═══════════════════════════════════════════════════════════════ */
-
-router.post("/api/deposits/:id/reject", requireSubadminSession, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { reason } = req.body;
-    const subadminId = req.session?.subadmin?.id;
-
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-    }
-
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({ ok: false, error: "INVALID_ID" });
-    }
-
-    const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
-    if (!subadminCheck) {
-      return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
-    }
-
-    if (!isActiveStatus(subadminCheck.status)) {
-      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
-    }
-
-    const deposit = await Deposit.findOneAndUpdate(
-      { _id: id, status: "pending" },
-      {
-        $set: {
-          status: "rejected",
-          approvedBy: subadminId,
-          approvalNote: reason || "",
-          approvedAt: new Date(),
-        },
-      },
-      { new: true }
+    const deposits = await Deposit.find({ _id: { $in: ids }, status: 'pending' });
+    
+    const totalAmount = deposits.reduce((sum, d) => sum + d.amount, 0);
+    
+    await Deposit.updateMany(
+      { _id: { $in: ids }, status: 'pending' },
+      { status: 'approved', processedBy: req.session.subadmin._id, processedAt: new Date() }
     );
 
-    if (!deposit) {
-      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-    }
+    const newBalance = (req.session.subadmin.balance || 0) + totalAmount;
+    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
+    req.session.subadmin.balance = newBalance;
 
-    // Send notification
-    if (deposit.chatId) {
-      sendTelegramMessage(
-        deposit.chatId,
-        `❌ <b>Deposit Rejected</b>\n\n💰 Amount: <b>${formatAmount(deposit.amount)} Birr</b>${reason ? `\n📝 Reason: ${reason}` : ""}\n\nPlease try again or contact support.`
-      );
-    }
-
-    return res.json({ ok: true, id });
-  } catch (err) {
-    console.error("[REJECT_DEPOSIT] Error:", err);
-    return res.status(500).json({ ok: false, error: "REJECT_FAIL" });
+    res.json({ ok: true, approved: deposits.length, failed: ids.length - deposits.length, newBalance });
+  } catch (error) {
+    res.json({ ok: false, error: 'UPDATE_FAILED' });
   }
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   ✅ APPROVE WITHDRAWAL (Single)
-═══════════════════════════════════════════════════════════════ */
+// ═══════════════════════════════════════════════════════════════
+// REJECT DEPOSIT
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/deposits/:id/reject', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
 
-router.post("/api/withdraws/:id/approve", requireSubadminSession, async (req, res) => {
-  const session = await mongoose.startSession();
+  if (req.session.subadmin.status !== 'active') {
+    return res.json({ ok: false, error: 'SLEEP_MODE' });
+  }
 
   try {
-    const { id } = req.params;
-    const subadminId = req.session?.subadmin?.id;
-
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-    }
-
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({ ok: false, error: "INVALID_ID" });
-    }
-
-    const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
-    if (!subadminCheck) {
-      return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
-    }
-
-    if (!isActiveStatus(subadminCheck.status)) {
-      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
-    }
-
-    let result = { withdraw: null, subadmin: null };
-
-    await session.withTransaction(async () => {
-      const withdraw = await Withdraw.findOne({ _id: id, status: "pending" }).session(session);
-
-      if (!withdraw) {
-        throw new Error("NOT_FOUND");
-      }
-
-      withdraw.status = "approved";
-      withdraw.approvedBy = subadminId;
-      withdraw.approvedAt = new Date();
-      await withdraw.save({ session });
-
-      const subadmin = await SubAdmin.findByIdAndUpdate(
-        subadminId,
-        { $inc: { balance: -roundBalance(withdraw.amount) } },
-        { new: true, session }
-      );
-
-      if (!subadmin) {
-        throw new Error("SUBADMIN_NOT_FOUND");
-      }
-
-      result = { withdraw, subadmin };
+    const Deposit = require('../models/Deposit');
+    await Deposit.findByIdAndUpdate(req.params.id, {
+      status: 'rejected',
+      processedBy: req.session.subadmin._id,
+      processedAt: new Date()
     });
 
-    // Send notification
-    if (result.withdraw?.chatId) {
-      sendTelegramMessage(
-        result.withdraw.chatId,
-        `✅ <b>Withdrawal Approved!</b>\n\n💸 Amount: <b>${formatAmount(result.withdraw.amount)} Birr</b>\n📱 To: <b>${result.withdraw.receiverPhone || "N/A"}</b>\n\nFunds sent successfully!`
-      );
-    }
-
-    return res.json({
-      ok: true,
-      id,
-      newBalance: roundBalance(result.subadmin?.balance || 0),
-    });
-  } catch (err) {
-    console.error("[APPROVE_WITHDRAW] Error:", err);
-    return res.status(400).json({ ok: false, error: err.message || "APPROVE_FAIL" });
-  } finally {
-    session.endSession();
+    res.json({ ok: true });
+  } catch (error) {
+    res.json({ ok: false, error: 'UPDATE_FAILED' });
   }
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   ✅ BULK APPROVE WITHDRAWALS
-═══════════════════════════════════════════════════════════════ */
+// ═══════════════════════════════════════════════════════════════
+// APPROVE WITHDRAW
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/withdraws/:id/approve', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
 
-router.post("/api/withdraws/bulk-approve", requireSubadminSession, async (req, res) => {
-  const session = await mongoose.startSession();
+  if (req.session.subadmin.status !== 'active') {
+    return res.json({ ok: false, error: 'SLEEP_MODE' });
+  }
+
+  try {
+    const Withdraw = require('../models/Withdraw');
+    const withdraw = await Withdraw.findById(req.params.id);
+
+    if (!withdraw || withdraw.status !== 'pending') {
+      return res.json({ ok: false, error: 'NOT_FOUND' });
+    }
+
+    withdraw.status = 'approved';
+    withdraw.processedBy = req.session.subadmin._id;
+    withdraw.processedAt = new Date();
+    await withdraw.save();
+
+    const newBalance = (req.session.subadmin.balance || 0) - withdraw.amount;
+    
+    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
+    req.session.subadmin.balance = newBalance;
+
+    res.json({ ok: true, newBalance });
+  } catch (error) {
+    res.json({ ok: false, error: 'UPDATE_FAILED' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// BULK APPROVE WITHDRAWS
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/withdraws/bulk-approve', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
+
+  if (req.session.subadmin.status !== 'active') {
+    return res.json({ ok: false, error: 'SLEEP_MODE' });
+  }
 
   try {
     const { ids } = req.body;
-    const subadminId = req.session?.subadmin?.id;
+    const Withdraw = require('../models/Withdraw');
 
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-    }
+    const withdraws = await Withdraw.find({ _id: { $in: ids }, status: 'pending' });
+    
+    const totalAmount = withdraws.reduce((sum, w) => sum + w.amount, 0);
+    
+    await Withdraw.updateMany(
+      { _id: { $in: ids }, status: 'pending' },
+      { status: 'approved', processedBy: req.session.subadmin._id, processedAt: new Date() }
+    );
 
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ ok: false, error: "INVALID_IDS" });
-    }
+    const newBalance = (req.session.subadmin.balance || 0) - totalAmount;
+    await SubAdmin.findByIdAndUpdate(req.session.subadmin._id, { balance: newBalance });
+    req.session.subadmin.balance = newBalance;
 
-    const validIds = ids.filter(isValidObjectId);
-    if (validIds.length === 0) {
-      return res.status(400).json({ ok: false, error: "NO_VALID_IDS" });
-    }
-
-    const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
-    if (!subadminCheck) {
-      return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
-    }
-
-    if (!isActiveStatus(subadminCheck.status)) {
-      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
-    }
-
-    let result = { approved: 0, failed: 0, totalAmount: 0, newBalance: 0 };
-
-    await session.withTransaction(async () => {
-      for (const id of validIds) {
-        try {
-          const withdraw = await Withdraw.findOne({ _id: id, status: "pending" }).session(
-            session
-          );
-
-          if (!withdraw) {
-            result.failed++;
-            continue;
-          }
-
-          withdraw.status = "approved";
-          withdraw.approvedBy = subadminId;
-          withdraw.approvedAt = new Date();
-          await withdraw.save({ session });
-
-          result.totalAmount += withdraw.amount;
-          result.approved++;
-
-          // Send notification
-          if (withdraw.chatId) {
-            sendTelegramMessage(
-              withdraw.chatId,
-              `✅ <b>Withdrawal Approved!</b>\n\n💸 Amount: <b>${formatAmount(withdraw.amount)} Birr</b>\n📱 To: <b>${withdraw.receiverPhone || "N/A"}</b>\n\nFunds sent successfully!`
-            );
-          }
-        } catch (err) {
-          console.error(`[BULK_APPROVE_WITHDRAW] Failed for ${id}:`, err);
-          result.failed++;
-        }
-      }
-
-      const subadmin = await SubAdmin.findByIdAndUpdate(
-        subadminId,
-        { $inc: { balance: -roundBalance(result.totalAmount) } },
-        { new: true, session }
-      );
-
-      if (!subadmin) {
-        throw new Error("SUBADMIN_NOT_FOUND");
-      }
-
-      result.newBalance = roundBalance(subadmin.balance || 0);
-    });
-
-    return res.json({ ok: true, ...result });
-  } catch (err) {
-    console.error("[BULK_APPROVE_WITHDRAWS] Error:", err);
-    return res.status(400).json({ ok: false, error: err.message || "BULK_APPROVE_FAIL" });
-  } finally {
-    session.endSession();
+    res.json({ ok: true, approved: withdraws.length, failed: ids.length - withdraws.length, newBalance });
+  } catch (error) {
+    res.json({ ok: false, error: 'UPDATE_FAILED' });
   }
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   ❌ REJECT WITHDRAWAL
-═══════════════════════════════════════════════════════════════ */
+// ═══════════════════════════════════════════════════════════════
+// REJECT WITHDRAW
+// ═══════════════════════════════════════════════════════════════
+router.post('/api/withdraws/:id/reject', async (req, res) => {
+  if (!req.session.subadmin) {
+    return res.json({ ok: false, error: 'UNAUTHORIZED' });
+  }
 
-router.post("/api/withdraws/:id/reject", requireSubadminSession, async (req, res) => {
-  const session = await mongoose.startSession();
+  if (req.session.subadmin.status !== 'active') {
+    return res.json({ ok: false, error: 'SLEEP_MODE' });
+  }
 
   try {
-    const { id } = req.params;
-    const { reason } = req.body;
-    const subadminId = req.session?.subadmin?.id;
-
-    if (!subadminId) {
-      return res.status(401).json({ ok: false, error: "UNAUTHORIZED" });
-    }
-
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({ ok: false, error: "INVALID_ID" });
-    }
-
-    const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
-    if (!subadminCheck) {
-      return res.status(404).json({ ok: false, error: "SUBADMIN_NOT_FOUND" });
-    }
-
-    if (!isActiveStatus(subadminCheck.status)) {
-      return res.status(403).json({ ok: false, error: "SLEEP_MODE" });
-    }
-
-    let result = { withdraw: null, user: null };
-
-    await session.withTransaction(async () => {
-      const withdraw = await Withdraw.findOneAndUpdate(
-        { _id: id, status: "pending" },
-        {
-          $set: {
-            status: "rejected",
-            approvedBy: subadminId,
-            approvalNote: reason || "",
-            approvedAt: new Date(),
-          },
-        },
-        { new: true, session }
-      );
-
-      if (!withdraw) {
-        throw new Error("NOT_FOUND");
-      }
-
-      const user = await User.findOneAndUpdate(
-        { telegramId: withdraw.telegramId },
-        { $inc: { Balance: withdraw.amount } },
-        { new: true, session }
-      );
-
-      result = { withdraw, user };
+    const Withdraw = require('../models/Withdraw');
+    await Withdraw.findByIdAndUpdate(req.params.id, {
+      status: 'rejected',
+      processedBy: req.session.subadmin._id,
+      processedAt: new Date()
     });
 
-    // Send notification
-    if (result.withdraw?.chatId) {
-      sendTelegramMessage(
-        result.withdraw.chatId,
-        `❌ <b>Withdrawal Rejected</b>\n\n💸 Amount: <b>${formatAmount(result.withdraw.amount)} Birr</b>\n💵 Refunded to balance!${reason ? `\n📝 Reason: ${reason}` : ""}\n\nYour new balance: <b>${formatAmount(result.user?.Balance || 0)} Birr</b>`
-      );
-    }
-
-    return res.json({ ok: true, id });
-  } catch (err) {
-    console.error("[REJECT_WITHDRAW] Error:", err);
-    return res.status(400).json({ ok: false, error: err.message || "REJECT_FAIL" });
-  } finally {
-    session.endSession();
+    res.json({ ok: true });
+  } catch (error) {
+    res.json({ ok: false, error: 'UPDATE_FAILED' });
   }
 });
 
