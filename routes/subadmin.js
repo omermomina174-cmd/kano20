@@ -20,18 +20,30 @@ router.use(express.json({ limit: "256kb" }));
 ═══════════════════════════════════════════════════════════════ */
 
 const formatAmount = (n) => Number(n || 0).toFixed(2);
-
 const roundBalance = (value) => Math.round((Number(value) || 0) * 100) / 100;
-
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
-
 const isActiveStatus = (status) => String(status || "").toLowerCase() === "active";
+
+/**
+ * Pick a target chat id for notifying the user.
+ * Deposit/Withdraw chatId is best, fallback to user's chatId, else telegramId.
+ */
+function pickTargetChatId({ deposit, withdraw, user }) {
+  const raw =
+    (deposit?.chatId ?? withdraw?.chatId ?? "") ||
+    (user?.chatId ?? "") ||
+    (deposit?.telegramId ?? withdraw?.telegramId ?? user?.telegramId ?? "");
+
+  const chatId = String(raw || "").trim();
+  return chatId ? chatId : null;
+}
 
 async function sendTelegramMessage(chatId, text) {
   const token = process.env.TELEGRAM_BOT_TOKEN_USER || process.env.BOT_TOKEN;
   if (!token || !chatId) return false;
 
   try {
+    // Node 18+ has global fetch
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,6 +54,12 @@ async function sendTelegramMessage(chatId, text) {
         disable_web_page_preview: true,
       }),
     });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.error("[TELEGRAM] Send failed:", res.status, body);
+    }
+
     return res.ok;
   } catch (e) {
     console.error("[TELEGRAM] Send failed:", e?.message);
@@ -58,43 +76,44 @@ router.get("/", (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   🔐 AUTHENTICATION (Same style as Admin)
+   🔐 AUTHENTICATION
 ═══════════════════════════════════════════════════════════════ */
 
-router.post("/api/auth", requireTelegramInitData("TELEGRAM_BOT_TOKEN_SUBADMIN"), async (req, res) => {
-  try {
-    const tgUser = req.tgUser;
-    const telegramId = String(tgUser.id);
+router.post(
+  "/api/auth",
+  requireTelegramInitData("TELEGRAM_BOT_TOKEN_SUBADMIN"),
+  async (req, res) => {
+    try {
+      const tgUser = req.tgUser;
+      const telegramId = String(tgUser.id);
 
-    const subadmin = await SubAdmin.findOne({ telegramId }).lean();
-    if (!subadmin) {
-      return res.status(403).json({ ok: false, error: "NOT_SUBADMIN" });
+      const subadmin = await SubAdmin.findOne({ telegramId }).lean();
+      if (!subadmin) return res.status(403).json({ ok: false, error: "NOT_SUBADMIN" });
+      if (subadmin.status?.toLowerCase() === "blocked") {
+        return res.status(403).json({ ok: false, error: "BLOCKED" });
+      }
+
+      req.session.subadmin = {
+        id: String(subadmin._id),
+        telegramId,
+        role: subadmin.role || "subadmin",
+        username: subadmin.username || tgUser.username || "",
+      };
+
+      return res.json({
+        ok: true,
+        subadmin: {
+          username: subadmin.username || tgUser.first_name || "",
+          status: subadmin.status || "active",
+          balance: roundBalance(subadmin.balance || 0),
+        },
+      });
+    } catch (err) {
+      console.error("[SUBADMIN_AUTH] error:", err);
+      return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
     }
-
-    if (subadmin.status?.toLowerCase() === "blocked") {
-      return res.status(403).json({ ok: false, error: "BLOCKED" });
-    }
-
-    req.session.subadmin = {
-      id: String(subadmin._id),
-      telegramId,
-      role: subadmin.role || "subadmin",
-      username: subadmin.username || tgUser.username || "",
-    };
-
-    return res.json({
-      ok: true,
-      subadmin: {
-        username: subadmin.username || tgUser.first_name || "",
-        status: subadmin.status || "active",
-        balance: roundBalance(subadmin.balance || 0),
-      },
-    });
-  } catch (err) {
-    console.error("[SUBADMIN_AUTH] error:", err);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
-});
+);
 
 router.post("/api/logout", requireSubadminSession, (req, res) => {
   req.session = null;
@@ -110,9 +129,7 @@ router.post("/api/toggle-status", requireSubadminSession, async (req, res) => {
     const subadminId = req.session.subadmin.id;
     const subadmin = await SubAdmin.findById(subadminId).select("status").lean();
 
-    if (!subadmin) {
-      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-    }
+    if (!subadmin) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
 
     const currentStatus = String(subadmin.status || "active").toLowerCase();
     const newStatus = currentStatus === "active" ? "sleep" : "active";
@@ -189,9 +206,7 @@ router.get("/api/deposits", requireSubadminSession, async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 50));
 
     const query = { status: "pending" };
-    if (cursor && isValidObjectId(cursor)) {
-      query._id = { $gt: cursor };
-    }
+    if (cursor && isValidObjectId(cursor)) query._id = { $gt: cursor };
 
     const deposits = await Deposit.find(query)
       .sort({ createdAt: 1, _id: 1 })
@@ -231,9 +246,7 @@ router.get("/api/withdraws", requireSubadminSession, async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 50));
 
     const query = { status: "pending" };
-    if (cursor && isValidObjectId(cursor)) {
-      query._id = { $gt: cursor };
-    }
+    if (cursor && isValidObjectId(cursor)) query._id = { $gt: cursor };
 
     const withdraws = await Withdraw.find(query)
       .sort({ createdAt: 1, _id: 1 })
@@ -265,7 +278,7 @@ router.get("/api/withdraws", requireSubadminSession, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   ✅ APPROVE DEPOSIT (Single)
+   ✅ APPROVE DEPOSIT (Single)  ✅ FIXED NOTIFICATION
 ═══════════════════════════════════════════════════════════════ */
 
 router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res) => {
@@ -275,9 +288,7 @@ router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res
     const { id } = req.params;
     const subadminId = req.session.subadmin.id;
 
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({ ok: false, error: "INVALID_ID" });
-    }
+    if (!isValidObjectId(id)) return res.status(400).json({ ok: false, error: "INVALID_ID" });
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
@@ -289,21 +300,17 @@ router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res
     await session.withTransaction(async () => {
       const deposit = await Deposit.findOneAndUpdate(
         { _id: id, status: "pending" },
-        {
-          $set: {
-            status: "approved",
-            approvedBy: subadminId,
-            approvedAt: new Date(),
-          },
-        },
+        { $set: { status: "approved", approvedBy: subadminId, approvedAt: new Date() } },
         { new: true, session }
       );
 
       if (!deposit) throw new Error("NOT_FOUND");
 
+      const amount = roundBalance(deposit.amount);
+
       const user = await User.findOneAndUpdate(
         { telegramId: deposit.telegramId },
-        { $inc: { Balance: deposit.amount } },
+        { $inc: { Balance: amount } },
         { new: true, session }
       );
 
@@ -311,7 +318,7 @@ router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res
 
       const subadmin = await SubAdmin.findByIdAndUpdate(
         subadminId,
-        { $inc: { balance: roundBalance(deposit.amount) } },
+        { $inc: { balance: amount } },
         { new: true, session }
       );
 
@@ -320,11 +327,16 @@ router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res
       result = { deposit, user, subadmin };
     });
 
-    if (result?.deposit?.chatId) {
-      sendTelegramMessage(
-        result.deposit.chatId,
+    // ✅ Send after transaction, with fallback chat id logic
+    const chatId = pickTargetChatId({ deposit: result?.deposit, user: result?.user });
+
+    if (chatId) {
+      await sendTelegramMessage(
+        chatId,
         `✅ <b>Deposit Approved!</b>\n\n💰 Amount: <b>${formatAmount(result.deposit.amount)} Birr</b>\n💵 New Balance: <b>${formatAmount(result.user.Balance)} Birr</b>\n\n🎮 Ready to play!`
       );
+    } else {
+      console.warn("[DEPOSIT_NOTICE] Missing chatId/telegramId for deposit:", String(result?.deposit?._id));
     }
 
     return res.json({
@@ -341,7 +353,7 @@ router.post("/api/deposits/:id/approve", requireSubadminSession, async (req, res
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   ✅ BULK APPROVE DEPOSITS
+   ✅ BULK APPROVE DEPOSITS  ✅ FIXED NOTIFICATION
 ═══════════════════════════════════════════════════════════════ */
 
 router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, res) => {
@@ -356,9 +368,7 @@ router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, re
     }
 
     const validIds = ids.filter(isValidObjectId);
-    if (validIds.length === 0) {
-      return res.status(400).json({ ok: false, error: "NO_VALID_IDS" });
-    }
+    if (validIds.length === 0) return res.status(400).json({ ok: false, error: "NO_VALID_IDS" });
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
@@ -367,18 +377,15 @@ router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, re
 
     let result = { approved: 0, failed: 0, totalAmount: 0, newBalance: 0 };
 
+    // Collect telegram messages to send after commit
+    const toNotify = [];
+
     await session.withTransaction(async () => {
       for (const id of validIds) {
         try {
           const deposit = await Deposit.findOneAndUpdate(
             { _id: id, status: "pending" },
-            {
-              $set: {
-                status: "approved",
-                approvedBy: subadminId,
-                approvedAt: new Date(),
-              },
-            },
+            { $set: { status: "approved", approvedBy: subadminId, approvedAt: new Date() } },
             { new: true, session }
           );
 
@@ -387,9 +394,11 @@ router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, re
             continue;
           }
 
+          const amount = roundBalance(deposit.amount);
+
           const user = await User.findOneAndUpdate(
             { telegramId: deposit.telegramId },
-            { $inc: { Balance: deposit.amount } },
+            { $inc: { Balance: amount } },
             { new: true, session }
           );
 
@@ -398,14 +407,15 @@ router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, re
             continue;
           }
 
-          result.totalAmount += deposit.amount;
+          result.totalAmount += amount;
           result.approved++;
 
-          if (deposit.chatId) {
-            sendTelegramMessage(
-              deposit.chatId,
-              `✅ <b>Deposit Approved!</b>\n\n💰 Amount: <b>${formatAmount(deposit.amount)} Birr</b>\n💵 New Balance: <b>${formatAmount(user.Balance)} Birr</b>\n\n🎮 Ready to play!`
-            );
+          const chatId = pickTargetChatId({ deposit, user });
+          if (chatId) {
+            toNotify.push({
+              chatId,
+              text: `✅ <b>Deposit Approved!</b>\n\n💰 Amount: <b>${formatAmount(deposit.amount)} Birr</b>\n💵 New Balance: <b>${formatAmount(user.Balance)} Birr</b>\n\n🎮 Ready to play!`,
+            });
           }
         } catch (err) {
           console.error(`[BULK_APPROVE_DEPOSIT] Failed for ${id}:`, err);
@@ -423,6 +433,11 @@ router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, re
       result.newBalance = roundBalance(subadmin.balance);
     });
 
+    // ✅ Send notifications after transaction
+    for (const n of toNotify) {
+      await sendTelegramMessage(n.chatId, n.text);
+    }
+
     return res.json({ ok: true, ...result });
   } catch (err) {
     console.error("[BULK_APPROVE_DEPOSITS] error:", err);
@@ -433,7 +448,7 @@ router.post("/api/deposits/bulk-approve", requireSubadminSession, async (req, re
 });
 
 /* ═══════════════════════════════════════════════════════════════
-   ❌ REJECT DEPOSIT
+   ❌ REJECT DEPOSIT  ✅ FIXED NOTIFICATION
 ═══════════════════════════════════════════════════════════════ */
 
 router.post("/api/deposits/:id/reject", requireSubadminSession, async (req, res) => {
@@ -442,9 +457,7 @@ router.post("/api/deposits/:id/reject", requireSubadminSession, async (req, res)
     const { reason } = req.body;
     const subadminId = req.session.subadmin.id;
 
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({ ok: false, error: "INVALID_ID" });
-    }
+    if (!isValidObjectId(id)) return res.status(400).json({ ok: false, error: "INVALID_ID" });
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
@@ -464,15 +477,20 @@ router.post("/api/deposits/:id/reject", requireSubadminSession, async (req, res)
       { new: true }
     );
 
-    if (!deposit) {
-      return res.status(404).json({ ok: false, error: "NOT_FOUND" });
-    }
+    if (!deposit) return res.status(404).json({ ok: false, error: "NOT_FOUND" });
 
-    if (deposit.chatId) {
-      sendTelegramMessage(
-        deposit.chatId,
-        `❌ <b>Deposit Rejected</b>\n\n💰 Amount: <b>${formatAmount(deposit.amount)} Birr</b>${reason ? `\n📝 Reason: ${reason}` : ""}\n\nPlease try again or contact support.`
+    // ✅ Send with fallback chat id logic
+    const chatId = pickTargetChatId({ deposit });
+
+    if (chatId) {
+      await sendTelegramMessage(
+        chatId,
+        `❌ <b>Deposit Rejected</b>\n\n💰 Amount: <b>${formatAmount(deposit.amount)} Birr</b>${
+          reason ? `\n📝 Reason: ${reason}` : ""
+        }\n\nPlease try again or contact support.`
       );
+    } else {
+      console.warn("[DEPOSIT_REJECT_NOTICE] Missing chatId/telegramId for deposit:", String(deposit._id));
     }
 
     return res.json({ ok: true, id });
@@ -493,9 +511,7 @@ router.post("/api/withdraws/:id/approve", requireSubadminSession, async (req, re
     const { id } = req.params;
     const subadminId = req.session.subadmin.id;
 
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({ ok: false, error: "INVALID_ID" });
-    }
+    if (!isValidObjectId(id)) return res.status(400).json({ ok: false, error: "INVALID_ID" });
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
@@ -506,7 +522,6 @@ router.post("/api/withdraws/:id/approve", requireSubadminSession, async (req, re
 
     await session.withTransaction(async () => {
       const withdraw = await Withdraw.findOne({ _id: id, status: "pending" }).session(session);
-
       if (!withdraw) throw new Error("NOT_FOUND");
 
       withdraw.status = "approved";
@@ -514,9 +529,11 @@ router.post("/api/withdraws/:id/approve", requireSubadminSession, async (req, re
       withdraw.approvedAt = new Date();
       await withdraw.save({ session });
 
+      const amount = roundBalance(withdraw.amount);
+
       const subadmin = await SubAdmin.findByIdAndUpdate(
         subadminId,
-        { $inc: { balance: -roundBalance(withdraw.amount) } },
+        { $inc: { balance: -amount } },
         { new: true, session }
       );
 
@@ -525,9 +542,10 @@ router.post("/api/withdraws/:id/approve", requireSubadminSession, async (req, re
       result = { withdraw, subadmin };
     });
 
-    if (result?.withdraw?.chatId) {
-      sendTelegramMessage(
-        result.withdraw.chatId,
+    const chatId = pickTargetChatId({ withdraw: result?.withdraw });
+    if (chatId) {
+      await sendTelegramMessage(
+        chatId,
         `✅ <b>Withdrawal Approved!</b>\n\n💸 Amount: <b>${formatAmount(result.withdraw.amount)} Birr</b>\n📱 To: <b>${result.withdraw.receiverPhone}</b>\n\nFunds sent successfully!`
       );
     }
@@ -561,9 +579,7 @@ router.post("/api/withdraws/bulk-approve", requireSubadminSession, async (req, r
     }
 
     const validIds = ids.filter(isValidObjectId);
-    if (validIds.length === 0) {
-      return res.status(400).json({ ok: false, error: "NO_VALID_IDS" });
-    }
+    if (validIds.length === 0) return res.status(400).json({ ok: false, error: "NO_VALID_IDS" });
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
@@ -571,6 +587,7 @@ router.post("/api/withdraws/bulk-approve", requireSubadminSession, async (req, r
     }
 
     let result = { approved: 0, failed: 0, totalAmount: 0, newBalance: 0 };
+    const toNotify = [];
 
     await session.withTransaction(async () => {
       for (const id of validIds) {
@@ -587,14 +604,16 @@ router.post("/api/withdraws/bulk-approve", requireSubadminSession, async (req, r
           withdraw.approvedAt = new Date();
           await withdraw.save({ session });
 
-          result.totalAmount += withdraw.amount;
+          const amount = roundBalance(withdraw.amount);
+          result.totalAmount += amount;
           result.approved++;
 
-          if (withdraw.chatId) {
-            sendTelegramMessage(
-              withdraw.chatId,
-              `✅ <b>Withdrawal Approved!</b>\n\n💸 Amount: <b>${formatAmount(withdraw.amount)} Birr</b>\n📱 To: <b>${withdraw.receiverPhone}</b>\n\nFunds sent successfully!`
-            );
+          const chatId = pickTargetChatId({ withdraw });
+          if (chatId) {
+            toNotify.push({
+              chatId,
+              text: `✅ <b>Withdrawal Approved!</b>\n\n💸 Amount: <b>${formatAmount(withdraw.amount)} Birr</b>\n📱 To: <b>${withdraw.receiverPhone}</b>\n\nFunds sent successfully!`,
+            });
           }
         } catch (err) {
           console.error(`[BULK_APPROVE_WITHDRAW] Failed for ${id}:`, err);
@@ -611,6 +630,10 @@ router.post("/api/withdraws/bulk-approve", requireSubadminSession, async (req, r
       if (!subadmin) throw new Error("SUBADMIN_NOT_FOUND");
       result.newBalance = roundBalance(subadmin.balance);
     });
+
+    for (const n of toNotify) {
+      await sendTelegramMessage(n.chatId, n.text);
+    }
 
     return res.json({ ok: true, ...result });
   } catch (err) {
@@ -633,9 +656,7 @@ router.post("/api/withdraws/:id/reject", requireSubadminSession, async (req, res
     const { reason } = req.body;
     const subadminId = req.session.subadmin.id;
 
-    if (!isValidObjectId(id)) {
-      return res.status(400).json({ ok: false, error: "INVALID_ID" });
-    }
+    if (!isValidObjectId(id)) return res.status(400).json({ ok: false, error: "INVALID_ID" });
 
     const subadminCheck = await SubAdmin.findById(subadminId).select("status").lean();
     if (!isActiveStatus(subadminCheck?.status)) {
@@ -660,19 +681,25 @@ router.post("/api/withdraws/:id/reject", requireSubadminSession, async (req, res
 
       if (!withdraw) throw new Error("NOT_FOUND");
 
+      const amount = roundBalance(withdraw.amount);
+
       const user = await User.findOneAndUpdate(
         { telegramId: withdraw.telegramId },
-        { $inc: { Balance: withdraw.amount } },
+        { $inc: { Balance: amount } },
         { new: true, session }
       );
 
       result = { withdraw, user };
     });
 
-    if (result?.withdraw?.chatId) {
-      sendTelegramMessage(
-        result.withdraw.chatId,
-        `❌ <b>Withdrawal Rejected</b>\n\n💸 Amount: <b>${formatAmount(result.withdraw.amount)} Birr</b>\n💵 Refunded to balance!${reason ? `\n📝 Reason: ${reason}` : ""}\n\nYour new balance: <b>${formatAmount(result.user?.Balance || 0)} Birr</b>`
+    const chatId = pickTargetChatId({ withdraw: result?.withdraw, user: result?.user });
+
+    if (chatId) {
+      await sendTelegramMessage(
+        chatId,
+        `❌ <b>Withdrawal Rejected</b>\n\n💸 Amount: <b>${formatAmount(result.withdraw.amount)} Birr</b>\n💵 Refunded to balance!${
+          reason ? `\n📝 Reason: ${reason}` : ""
+        }\n\nYour new balance: <b>${formatAmount(result.user?.Balance || 0)} Birr</b>`
       );
     }
 
