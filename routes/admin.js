@@ -702,30 +702,50 @@ router.get("/api/users", requireAdminSession, async (req, res) => {
 
 router.post("/api/users/update", requireAdminSession, async (req, res) => {
   try {
-    const { userId, adjustBalance, status } = req.body || {};
-    if (!userId) return res.status(400).json({ ok: false, error: "BAD_INPUT" });
-
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
-
-    const adjust = Number(adjustBalance || 0);
-    if (Number.isFinite(adjust) && adjust !== 0) {
-      user.Balance = Math.max(0, Number(user.Balance || 0) + adjust);
+    const { userId, adjustBalance, status } = req.body;
+    if (!userId) {
+      return res.status(400).json({ ok: false, error: "BAD_INPUT" });
     }
 
-    if (status && ["active", "blocked"].includes(String(status).toLowerCase())) {
-      user.status = String(status).toLowerCase();
+    const adjust = Number(adjustBalance);
+    if (!Number.isFinite(adjust) || adjust === 0) {
+      return res.status(400).json({ ok: false, error: "INVALID_ADJUST" });
     }
 
-    await user.save();
+    const user = await User.findOneAndUpdate(
+      { _id: userId },
+      [
+        {
+          $set: {
+            Balance: {
+              $max: [0, { $add: ["$Balance", adjust] }],
+            },
+          },
+        },
+      ],
+      { new: true }
+    );
 
-    return res.json({
+    if (!user) {
+      return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
+    }
+
+    if (["active", "blocked"].includes(String(status).toLowerCase())) {
+      user.status = status.toLowerCase();
+      await user.save();
+    }
+
+    res.json({
       ok: true,
-      user: { _id: user._id, Balance: Number(user.Balance || 0), status: user.status },
+      user: {
+        _id: user._id,
+        Balance: user.Balance,
+        status: user.status,
+      },
     });
   } catch (err) {
     console.error("[USER_UPDATE] error:", err);
-    return res.status(500).json({ ok: false, error: "SERVER_ERROR" });
+    res.status(500).json({ ok: false, error: "SERVER_ERROR" });
   }
 });
 
