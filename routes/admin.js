@@ -708,32 +708,26 @@ router.post("/api/users/update", requireAdminSession, async (req, res) => {
     }
 
     const adjust = Number(adjustBalance);
-    if (!Number.isFinite(adjust) || adjust === 0) {
+    if (!Number.isFinite(adjust)) {
       return res.status(400).json({ ok: false, error: "INVALID_ADJUST" });
     }
 
-    const user = await User.findOneAndUpdate(
-      { _id: userId },
-      [
-        {
-          $set: {
-            Balance: {
-              $max: [0, { $add: ["$Balance", adjust] }],
-            },
-          },
-        },
-      ],
-      { new: true }
-    );
-
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ ok: false, error: "USER_NOT_FOUND" });
     }
 
+    // ✅ floor-at-zero logic
+    if (adjust !== 0) {
+      const current = Number(user.Balance || 0);
+      user.Balance = Math.max(0, current + adjust);
+    }
+
     if (["active", "blocked"].includes(String(status).toLowerCase())) {
       user.status = status.toLowerCase();
-      await user.save();
     }
+
+    await user.save();
 
     res.json({
       ok: true,
