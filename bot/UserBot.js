@@ -1,434 +1,655 @@
 "use strict";
 
 const TelegramBot = require("node-telegram-bot-api");
+const User = require("../models/user");
 const Admin = require("../models/admin");
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   GLOBAL ERROR HANDLERS
-═══════════════════════════════════════════════════════════════════════════ */
-if (!global.__ADMIN_BOT_ERROR_HANDLERS_REGISTERED__) {
-  global.__ADMIN_BOT_ERROR_HANDLERS_REGISTERED__ = true;
-
-  process.on("unhandledRejection", (reason) => {
-    console.error("[ADMIN_BOT] Unhandled Rejection:", reason);
-  });
-
-  process.on("uncaughtException", (error) => {
-    console.error("[ADMIN_BOT] Uncaught Exception:", error);
-  });
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   CONFIG
-═══════════════════════════════════════════════════════════════════════════ */
-const CONFIG = Object.freeze({
-  MAX_MESSAGE_LENGTH: 4096,
-  DB_MAX_TIME_MS: 5000,
-  RATE_LIMIT_WINDOW_MS: 1000,
-  MAX_REQUESTS_PER_WINDOW: 4,
-  BOT_USERNAME: process.env.ADMIN_BOT_USERNAME || process.env.BOT_USERNAME || "",
-});
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   KEYBOARDS
-═══════════════════════════════════════════════════════════════════════════ */
-const KEYBOARDS = Object.freeze({
-  contactRequest: {
-    keyboard: [[{ text: "📱 Share Phone Number", request_contact: true }]],
-    resize_keyboard: true,
-    one_time_keyboard: true,
-    input_field_placeholder: "Tap to share your contact",
-  },
-
-  remove: { remove_keyboard: true },
-});
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   MESSAGE TEMPLATES (Simple & Clean)
-═══════════════════════════════════════════════════════════════════════════ */
-const Messages = {
-  welcome: (name) =>
-`👑 *Welcome, ${name}!*
-
-You're all set. Tap below to access your Admin Panel.
-
-እንኳን ደህና መጡ!`,
-
-  registered: (name) =>
-`✅ *Registration Complete!*
-
-Welcome aboard, *${name}*! You now have full admin access.
-
-በተሳካ ሁኔታ ተመዝግበዋል።`,
-
-  alreadyRegistered: () =>
-`✅ *Already Registered*
-
-You're already set up as Admin.
-
-እርስዎ ቀድሞውኑ ተመዝግበዋል።`,
-
-  shareContact: () =>
-`📱 *Verification Required*
-
-Share your phone number to continue.
-
-ስልክ ቁጥርዎን ያጋሩ 👇`,
-
-  shareOwnContact: () =>
-`⚠️ *Share Your Own Contact*
-
-Please share *your* phone number.
-
-የራስዎን ስልክ ቁጥር ያጋሩ 👇`,
-
-  accessDenied: () =>
-`🚫 *Access Denied*
-
-Your phone number is not authorized.
-
-ስልክዎ ፈቃድ የለውም።`,
-
-  registrationDisabled: () =>
-`⚠️ *Registration Unavailable*
-
-Admin registration is currently disabled.
-
-Please contact the system administrator.`,
-
-  privateOnly: () =>
-`🔒 *Private Chat Only*
-
-Please message me directly.
-
-በግል ውይይት ይላኩኝ።`,
-
-  openPanel: () =>
-`🚀 *Admin Panel*
-
-Tap below to access the dashboard.
-
-ፓነሉን ለመክፈት ከታች ይጫኑ 👇`,
-
-  panelNotConfigured: () =>
-`⚙️ *Configuration Error*
-
-Admin panel URL not configured.
-
-Please contact the developer.`,
-
-  rateLimited: () =>
-`⏳ *Slow Down*
-
-Too many requests. Wait a moment.
-
-እባክዎ ይጠብቁ።`,
-
-  error: () =>
-`❌ *Error*
-
-Something went wrong. Try again.
-
-ስህተት ተከስቷል።`,
-
-  invalidContact: () =>
-`❌ *Invalid Contact*
-
-Please try again.
-
-እባክዎ እንደገና ይሞክሩ።`,
-};
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Phone helpers (Ethiopia-friendly)
-═══════════════════════════════════════════════════════════════════════════ */
-function digitsOnly(v) {
-  return String(v || "").replace(/\D/g, "");
-}
-
-function normalizeETPhone(v) {
-  const d = digitsOnly(v);
-  if (!d) return "";
-
-  if (d.startsWith("251") && d.length === 12 && d[3] === "9") return "0" + d.slice(3);
-  if (d.length === 9 && d.startsWith("9")) return "0" + d;
-  if (d.length === 10 && d.startsWith("0")) return d;
-
-  return d;
-}
-
-function phoneVariants(v) {
-  const p = normalizeETPhone(v);
-  const out = new Set();
-  if (!p) return [];
-
-  out.add(p);
-
-  if (p.length === 10 && p.startsWith("0") && p[1] === "9") {
-    out.add(p.slice(1));
-    out.add("251" + p.slice(1));
-  }
-
-  const raw = digitsOnly(v);
-  if (raw) out.add(raw);
-
-  return [...out];
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   WebApp link builder
-═══════════════════════════════════════════════════════════════════════════ */
-function buildAdminPanelLink() {
-  let base = String(process.env.WEBAPP_URL || "").trim();
-  if (!base) return null;
-
-  if (!/^https?:\/\//i.test(base)) base = "https://" + base;
-
-  try {
-    const url = new URL("/admin", base);
-    return url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Utilities
-═══════════════════════════════════════════════════════════════════════════ */
-function isPrivateChat(msg) {
-  return msg?.chat?.type === "private";
-}
-
-function roleIsAdmin(role) {
-  const r = String(role || "").trim().toLowerCase();
-  return r === "admin" || r === "superadmin";
-}
-
-function isValidChatId(id) {
-  const n = Number(id);
-  return Number.isInteger(n) && n !== 0;
-}
-
-function isValidTelegramId(id) {
-  const n = Number(id);
-  return Number.isInteger(n) && n > 0;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Build allowed admin phone set from environment
-═══════════════════════════════════════════════════════════════════════════ */
-function buildAdminPhoneSet() {
-  const phoneSet = new Set();
-  const rawPhones = String(process.env.ADMIN_PHONES || "")
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
-
-  for (const phone of rawPhones) {
-    for (const variant of phoneVariants(phone)) {
-      phoneSet.add(variant);
-    }
-  }
-
-  return phoneSet;
-}
-
-const ADMIN_PHONE_SET = buildAdminPhoneSet();
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Rate limiting
-═══════════════════════════════════════════════════════════════════════════ */
-const rateMap = new Map();
-
-function isRateLimited(telegramId) {
-  const now = Date.now();
-  const key = String(telegramId);
-  const entry = rateMap.get(key);
-
-  if (!entry || now - entry.windowStart > CONFIG.RATE_LIMIT_WINDOW_MS) {
-    rateMap.set(key, { windowStart: now, count: 1 });
-    return false;
-  }
-
-  entry.count++;
-  return entry.count > CONFIG.MAX_REQUESTS_PER_WINDOW;
-}
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of rateMap.entries()) {
-    if (now - v.windowStart > CONFIG.RATE_LIMIT_WINDOW_MS * 20) rateMap.delete(k);
-  }
-}, 60_000).unref?.();
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   Bot factory
-═══════════════════════════════════════════════════════════════════════════ */
-module.exports = (token) => {
-  if (!token || typeof token !== "string" || token.length < 20) {
-    throw new Error("Admin bot token is missing or invalid.");
-  }
-
-  const bot = new TelegramBot(token, {
-    polling: { autoStart: true, params: { timeout: 30 } },
-  });
-
-  console.log("[ADMIN_BOT] ✅ Bot started (polling).");
+const deposit = require("../handlers/deposit");
+const withdraw = require("../handlers/withdraw");
+
+/**
+ * 🎮 KANO 20 USER BOT
+ * Clean, professional & user-friendly
+ */
+
+module.exports = function createUserBot(token, WEBAPP_URL) {
+  if (!token) throw new Error("[USER_BOT] Missing bot token");
+
+  const bot = new TelegramBot(token, { polling: true });
+  console.log("[USER_BOT] ✅ Bot started successfully");
+
+  /* ═══════════════════════════════════════════
+     ⚙️ CONFIGURATION
+  ═══════════════════════════════════════════ */
+
+  const CONFIG = {
+    BOT_USERNAME: process.env.USER_BOT_USERNAME || "",
+    MAX_MESSAGE_LENGTH: 4096,
+    DEFAULT_USER_LIMIT: 1000,
+    SUPPORT_USERNAME: "kanogameultra", // Support contact username
+    DB_MAX_TIME_MS: 5000,
+  };
+
+  /* ═══════════════════════════════════════════
+     🎨 KEYBOARD LAYOUTS
+  ═══════════════════════════════════════════ */
+
+  const Keyboards = {
+    contact: {
+      reply_markup: {
+        keyboard: [
+          [{ text: "📱 Share Phone Number", request_contact: true }],
+        ],
+        resize_keyboard: true,
+        one_time_keyboard: true,
+      },
+    },
+
+    mainMenu: {
+      reply_markup: {
+        keyboard: [
+          [{ text: "🎮 Play" }, { text: "💰 Balance" }],
+          [{ text: "💳 Deposit" }, { text: "💸 Withdraw" }],
+          [{ text: "📞 Support" }],
+        ],
+        resize_keyboard: true,
+      },
+    },
+
+    cancel: {
+      reply_markup: {
+        keyboard: [[{ text: "❌ Cancel" }]],
+        resize_keyboard: true,
+      },
+    },
+
+    playButton: (url) => ({
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🎮 Launch Game", web_app: { url } }],
+        ],
+      },
+    }),
+
+    supportButton: (username) => ({
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "💬 Contact Support", url: `https://t.me/${username}` }],
+          [{ text: "🔙 Back", callback_data: "back_to_menu" }],
+        ],
+      },
+    }),
+
+    remove: {
+      reply_markup: { remove_keyboard: true },
+    },
+  };
+
+  /* ═══════════════════════════════════════════
+     🔧 UTILITY FUNCTIONS
+  ═══════════════════════════════════════════ */
+
+  const Utils = {
+    escapeMarkdown(text) {
+      return String(text ?? "").replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
+    },
+
+    isPrivateChat(msg) {
+      return msg?.chat?.type === "private";
+    },
+
+    digitsOnly(value) {
+      return String(value ?? "").replace(/\D/g, "");
+    },
+
+    normalizePhone(raw) {
+      const digits = this.digitsOnly(raw);
+      if (digits.startsWith("251") && digits.length === 12) {
+        return "0" + digits.slice(3);
+      }
+      if (digits.length === 9 && digits.startsWith("9")) {
+        return "0" + digits;
+      }
+      if (digits.length === 10 && digits.startsWith("0")) {
+        return digits;
+      }
+      return digits || "";
+    },
+
+    formatBalance(balance) {
+      return Number(balance ?? 0).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    },
+
+    buildWebAppUrl(base, path) {
+      try {
+        let url = String(base ?? "").trim();
+        if (!url) return null;
+        if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+        const fullUrl = new URL(path, url);
+        return fullUrl.protocol === "https:" ? fullUrl.toString() : null;
+      } catch {
+        return null;
+      }
+    },
+  };
+
+  /* ═══════════════════════════════════════════
+     📤 SAFE MESSAGE SENDER
+  ═══════════════════════════════════════════ */
 
   async function safeSend(chatId, text, options = {}) {
-    if (!isValidChatId(chatId)) return null;
-    const msg = String(text ?? "").slice(0, CONFIG.MAX_MESSAGE_LENGTH);
-    if (!msg) return null;
+    if (!chatId || !text) return null;
+
+    const message = String(text).slice(0, CONFIG.MAX_MESSAGE_LENGTH);
 
     try {
-      return await bot.sendMessage(chatId, msg, {
+      return await bot.sendMessage(chatId, message, {
         parse_mode: "Markdown",
         disable_web_page_preview: true,
-        allow_sending_without_reply: true,
         ...options,
       });
-    } catch (e) {
-      const errMsg = e?.message || String(e);
-
-      if (errMsg.includes("bot was blocked")) {
-        console.warn(`[ADMIN_BOT] Bot blocked by chatId=${chatId}`);
-        return null;
-      }
-      if (errMsg.includes("chat not found")) {
-        console.warn(`[ADMIN_BOT] Chat not found chatId=${chatId}`);
-        return null;
-      }
-
-      // Retry without markdown
-      if (errMsg.toLowerCase().includes("can't parse")) {
-        return bot.sendMessage(chatId, msg, {
+    } catch (error) {
+      if (error?.message?.toLowerCase().includes("can't parse")) {
+        return bot.sendMessage(chatId, message, {
           disable_web_page_preview: true,
-          allow_sending_without_reply: true,
           ...options,
           parse_mode: undefined,
         });
       }
-
-      console.error("[ADMIN_BOT] sendMessage failed:", errMsg);
+      console.error("[USER_BOT] Send error:", error?.message);
       return null;
     }
   }
 
-  async function getAdminLean(telegramId) {
-    return Admin.findOne({ telegramId: String(telegramId) })
-      .select("username telegramId chatId role phoneNumber")
+  /* ═══════════════════════════════════════════
+     👤 USER FUNCTIONS
+  ═══════════════════════════════════════════ */
+
+  async function findUser(telegramId) {
+    return User.findOne({ telegramId: String(telegramId) })
+      .select("username telegramId chatId role status phoneNo Balance")
       .lean()
       .maxTimeMS(CONFIG.DB_MAX_TIME_MS);
   }
 
-  async function ensureChatIdSaved(telegramId, chatId) {
-    Admin.updateOne(
-      { telegramId: String(telegramId) },
-      { $set: { chatId: String(chatId) } }
-    ).catch(() => {});
+  function isBlocked(user) {
+    return String(user?.status || "").toLowerCase() === "blocked";
   }
 
-  async function checkAdminAccess(msg) {
+  function isValidChatId(id) {
+    const n = Number(id);
+    return Number.isInteger(n) && n !== 0;
+  }
+
+  function isValidTelegramId(id) {
+    const n = Number(id);
+    return Number.isInteger(n) && n > 0;
+  }
+
+  async function getUserLimit() {
+    try {
+      const settings = await Admin.getSystemSettings();
+      return settings.maxUserLimit || CONFIG.DEFAULT_USER_LIMIT;
+    } catch {
+      return CONFIG.DEFAULT_USER_LIMIT;
+    }
+  }
+
+  async function canRegisterNewUser() {
+    const [currentCount, maxLimit] = await Promise.all([
+      User.countDocuments({ role: "user" }),
+      getUserLimit(),
+    ]);
+    return currentCount < maxLimit;
+  }
+
+  /* ═══════════════════════════════════════════
+     💬 MESSAGE TEMPLATES (Simple & Beautiful)
+  ═══════════════════════════════════════════ */
+
+  const Messages = {
+    welcome: () =>
+`🎰 *Welcome to KANO 20!*
+እንኳን ደህና መጡ!
+
+🏆 Win up to *50,000 ብር* daily
+⚡ Instant prizes & fast payouts
+
+To start, share your phone number below 👇
+ለመጀመር ስልክ ቁጥርዎን ያጋሩ`,
+
+    registered: () =>
+`✅ *You're All Set!*
+በተሳካ ሁኔታ ተመዝግበዋል!
+
+🎮 Play games / ጫወት
+💰 Check balance / ቀሪ ሂሳብ
+💳 Deposit & withdraw / ገንዘብ ያስገቡ/ያውጡ
+
+Use the menu below to begin 👇`,
+
+    welcomeBack: (name) =>
+`👋 *Welcome Back!*
+እንኳን ደህና ተመለሱ!
+
+Hello, *${Utils.escapeMarkdown(name)}*! 
+Ready to play?`,
+
+    menu: (user) => {
+      const name = user?.username || "Player";
+      const balance = Utils.formatBalance(user?.Balance);
+
+      return `🎰 *KANO 20*
+
+👤 ${Utils.escapeMarkdown(name)}
+💰 Balance: \`${balance}\` ብር
+
+Choose an option below:`;
+    },
+
+    balance: (user) => {
+      const balance = Utils.formatBalance(user?.Balance);
+
+      return `💰 *Your Balance*
+
+💵 \`${balance}\` ብር
+
+💳 Deposit — Add funds
+💸 Withdraw — Cash out
+🎮 Play — Win more!`;
+    },
+
+    play: () =>
+`🎮 *Ready to Play!*
+
+🎯 Pick your numbers
+🏆 Win instantly
+💰 Up to 50,000 ብር
+
+🍀 Good luck!
+መልካም ዕድል!
+
+Tap below to start 👇`,
+
+    support: () =>
+`📞 *Support*
+
+Need help? Contact us:
+
+• Deposit/Withdrawal
+• Game questions
+• Technical issues
+• General inquiries
+
+⏰ Response: Usually 24 hours
+
+Tap below 👇`,
+
+    blocked: () =>
+`🚫 *Account Blocked*
+
+Your account has been blocked by admin.
+Please contact support.
+
+መለያዎ ታግዷል። ድጋፍን ያግኙ።`,
+
+    privateOnly: () =>
+`🔒 *Private Chat Only*
+
+Please message me directly.
+እባክዎ በግል ውይይት ይላኩኝ።`,
+
+    shareOwnContact: () =>
+`⚠️ *Share Your Own Contact*
+
+Please share *your* phone number.
+የራስዎን ስልክ ቁጥር ያጋሩ።
+
+Tap below 👇`,
+
+    registerFirst: () =>
+`📱 *Registration Required*
+
+Please register first.
+መጀመሪያ ይመዝገቡ።
+
+Share your contact below 👇`,
+
+    limitReached: () =>
+`⏳ *Registration Full*
+
+Maximum users reached.
+Try again later!
+
+በቀጣይ ይሞክሩ።`,
+
+    configError: () =>
+`⚙️ *Temporarily Unavailable*
+
+Service unavailable. Try later.
+እባክዎ ቆይተው ይሞክሩ።`,
+
+    cancelled: () =>
+`❌ *Cancelled*
+
+Use the menu below 👇`,
+
+    nothingToCancel: () =>
+`ℹ️ *Nothing to Cancel*
+
+Choose from menu below 👇`,
+
+    error: () =>
+`❌ *Error*
+
+Something went wrong. Try again.
+እባክዎ እንደገና ይሞክሩ።`,
+
+    invalidContact: () =>
+`❌ *Invalid Contact*
+
+Please try again.
+እባክዎ እንደገና ይሞክሩ።`,
+  };
+
+  /* ═══════════════════════════════════════════
+     🎯 SCREEN DISPLAYS
+  ═══════════════════════════════════════════ */
+
+  async function showMenu(chatId, user) {
+    return safeSend(chatId, Messages.menu(user), Keyboards.mainMenu);
+  }
+
+  async function showBalance(chatId, user) {
+    return safeSend(chatId, Messages.balance(user), Keyboards.mainMenu);
+  }
+
+  async function showPlay(chatId) {
+    const baseUrl = WEBAPP_URL || process.env.WEBAPP_URL;
+    const url = Utils.buildWebAppUrl(baseUrl, "/home_user");
+
+    if (!url) {
+      return safeSend(chatId, Messages.configError(), Keyboards.mainMenu);
+    }
+
+    return safeSend(chatId, Messages.play(), Keyboards.playButton(url));
+  }
+
+  async function showSupport(chatId) {
+    return safeSend(
+      chatId,
+      Messages.support(),
+      Keyboards.supportButton(CONFIG.SUPPORT_USERNAME)
+    );
+  }
+
+  /* ═══════════════════════════════════════════
+     ✅ REQUIRE USER MIDDLEWARE
+  ═══════════════════════════════════════════ */
+
+  async function requireUser(msg) {
     const chatId = msg?.chat?.id;
     const telegramId = msg?.from?.id;
 
-    if (!isValidChatId(chatId) || !isValidTelegramId(telegramId)) return null;
-    if (isRateLimited(telegramId)) {
-      await safeSend(chatId, Messages.rateLimited());
-      return null;
+    if (!isValidChatId(chatId) || !isValidTelegramId(telegramId)) {
+      return { ok: false };
     }
 
-    const admin = await getAdminLean(telegramId);
-
-    if (!admin || !roleIsAdmin(admin.role)) {
-      await safeSend(chatId, Messages.accessDenied());
-      return null;
+    if (!Utils.isPrivateChat(msg)) {
+      await safeSend(chatId, Messages.privateOnly());
+      return { ok: false };
     }
 
-    if (!admin.chatId || String(admin.chatId) !== String(chatId)) {
-      ensureChatIdSaved(telegramId, chatId);
+    const user = await findUser(telegramId);
+
+    if (!user) {
+      await safeSend(chatId, Messages.registerFirst(), Keyboards.contact);
+      return { ok: false };
     }
 
-    return admin;
+    // ✅ CRITICAL: Check if user is BLOCKED
+    if (isBlocked(user)) {
+      await safeSend(chatId, Messages.blocked());
+      return { ok: false };
+    }
+
+    return {
+      ok: true,
+      user,
+      chatId,
+      telegramId: String(telegramId),
+    };
   }
 
-  async function sendPanelAccess(chatId, messageText) {
-    const panelUrl = buildAdminPanelLink();
+  /* ═══════════════════════════════════════════
+     🎮 COMMAND HANDLERS
+  ═══════════════════════════════════════════ */
 
-    if (!panelUrl) {
-      return safeSend(chatId, Messages.panelNotConfigured(), {
-        reply_markup: KEYBOARDS.remove,
-      });
-    }
-
-    return safeSend(chatId, messageText, {
-      reply_markup: {
-        inline_keyboard: [[{ text: "🚀 Open Admin Panel", web_app: { url: panelUrl } }]],
-      },
-    });
-  }
-
-  async function sendWelcome(msg, admin) {
-    const chatId = msg.chat.id;
-    const name = msg.from.first_name || msg.from.username || admin?.username || "Admin";
-
-    return sendPanelAccess(chatId, Messages.welcome(name));
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     Set bot commands
-  ═══════════════════════════════════════════════════════════════════════ */
-  bot.setMyCommands([
-    { command: "start", description: "🏠 Start / ጀምር" },
-    { command: "admin_panel", description: "🚀 Open Panel / ፓነል" },
-  ]).catch(() => {});
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     /start
-  ═══════════════════════════════════════════════════════════════════════ */
-  bot.onText(/^\/start(?:@\w+)?$/i, async (msg) => {
+  async function handleStart(msg) {
     const chatId = msg?.chat?.id;
     const telegramId = msg?.from?.id;
 
     if (!isValidChatId(chatId) || !isValidTelegramId(telegramId)) return;
 
-    if (!isPrivateChat(msg)) {
-      await safeSend(chatId, Messages.privateOnly());
-      return;
+    if (!Utils.isPrivateChat(msg)) {
+      return safeSend(chatId, Messages.privateOnly());
     }
 
-    if (isRateLimited(telegramId)) return;
+    const user = await findUser(telegramId);
+
+    if (!user) {
+      return safeSend(chatId, Messages.welcome(), Keyboards.contact);
+    }
+
+    // ✅ Check if blocked
+    if (isBlocked(user)) {
+      return safeSend(chatId, Messages.blocked());
+    }
+
+    return showMenu(chatId, user);
+  }
+
+  async function handlePlay(msg) {
+    const result = await requireUser(msg);
+    if (!result.ok) return;
+    return showPlay(result.chatId);
+  }
+
+  async function handleBalance(msg) {
+    const result = await requireUser(msg);
+    if (!result.ok) return;
+    
+    // Refresh user data for latest balance
+    const fresh = await findUser(result.telegramId);
+    if (!fresh || isBlocked(fresh)) {
+      return safeSend(result.chatId, Messages.blocked());
+    }
+    
+    return showBalance(result.chatId, fresh);
+  }
+
+  async function handleDeposit(msg) {
+    const result = await requireUser(msg);
+    if (!result.ok) return;
+
+    if (deposit?.startDeposit) {
+      return deposit.startDeposit(bot, msg, result.user, safeSend);
+    }
+  }
+
+  async function handleWithdraw(msg) {
+    const result = await requireUser(msg);
+    if (!result.ok) return;
+
+    if (withdraw?.startWithdraw) {
+      return withdraw.startWithdraw(bot, msg, result.user, safeSend);
+    }
+  }
+
+  async function handleSupport(msg) {
+    const result = await requireUser(msg);
+    if (!result.ok) return;
+    return showSupport(result.chatId);
+  }
+
+  async function handleCancel(msg) {
+    const result = await requireUser(msg);
+    if (!result.ok) return;
+
+    if (deposit?.handleDepositFlow) {
+      const cancelMsg = { ...msg, text: "/cancel" };
+      const handled = await deposit.handleDepositFlow(bot, cancelMsg, result.user, safeSend);
+      if (handled) {
+        const fresh = await findUser(result.telegramId);
+        return showMenu(result.chatId, fresh);
+      }
+    }
+
+    if (withdraw?.handleWithdrawFlow) {
+      const cancelMsg = { ...msg, text: "/cancel" };
+      const handled = await withdraw.handleWithdrawFlow(bot, cancelMsg, result.user, safeSend);
+      if (handled) {
+        const fresh = await findUser(result.telegramId);
+        return showMenu(result.chatId, fresh);
+      }
+    }
+
+    await safeSend(result.chatId, Messages.nothingToCancel(), Keyboards.mainMenu);
+  }
+
+  /* ═══════════════════════════════════════════
+     📋 SET BOT COMMANDS
+  ═══════════════════════════════════════════ */
+
+  bot.setMyCommands([
+    { command: "start", description: "🏠 Start / ጀምር" },
+    { command: "play", description: "🎮 Play / ጫወት" },
+    { command: "balance", description: "💰 Balance / ቀሪ ሂሳብ" },
+    { command: "deposit", description: "💳 Deposit / ገንዘብ አስገባ" },
+    { command: "withdraw", description: "💸 Withdraw / ገንዘብ አውጣ" },
+    { command: "support", description: "📞 Support / ድጋፍ" },
+    { command: "cancel", description: "❌ Cancel / ሰርዝ" },
+  ]).catch(() => {});
+
+  /* ═══════════════════════════════════════════
+     📡 COMMAND LISTENERS
+  ═══════════════════════════════════════════ */
+
+  bot.onText(/^\/start(?:@\w+)?$/i, handleStart);
+  bot.onText(/^\/play(?:@\w+)?$/i, handlePlay);
+  bot.onText(/^\/balance(?:@\w+)?$/i, handleBalance);
+  bot.onText(/^\/deposit(?:@\w+)?$/i, handleDeposit);
+  bot.onText(/^\/withdraw(?:@\w+)?$/i, handleWithdraw);
+  bot.onText(/^\/support(?:@\w+)?$/i, handleSupport);
+  bot.onText(/^\/cancel(?:@\w+)?$/i, handleCancel);
+
+  /* ═══════════════════════════════════════════
+     🔘 CALLBACK QUERY HANDLER
+  ═══════════════════════════════════════════ */
+
+  bot.on("callback_query", async (query) => {
+    const chatId = query?.message?.chat?.id;
+    const telegramId = query?.from?.id;
+    const data = query?.data;
+
+    if (!isValidChatId(chatId) || !isValidTelegramId(telegramId) || !data) return;
 
     try {
-      const admin = await getAdminLean(telegramId);
+      await bot.answerCallbackQuery(query.id).catch(() => {});
 
-      if (admin && roleIsAdmin(admin.role)) {
-        if (!admin.chatId || String(admin.chatId) !== String(chatId)) {
-          ensureChatIdSaved(telegramId, chatId);
+      if (data === "back_to_menu") {
+        const user = await findUser(telegramId);
+        if (user && !isBlocked(user)) {
+          return showMenu(chatId, user);
         }
-
-        await sendWelcome(msg, admin);
-        return;
       }
-
-      // Check if registration is enabled
-      if (ADMIN_PHONE_SET.size === 0) {
-        await safeSend(chatId, Messages.registrationDisabled());
-        return;
-      }
-
-      await safeSend(chatId, Messages.shareContact(), {
-        reply_markup: KEYBOARDS.contactRequest,
-      });
-    } catch (err) {
-      console.error("[ADMIN_BOT][/start] error:", err?.message || err);
-      await safeSend(chatId, Messages.error());
+    } catch (error) {
+      console.error("[USER_BOT] Callback error:", error?.message);
     }
   });
 
-  /* ═══════════════════════════════════════════════════════════════════════
-     Contact registration
-  ═══════════════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════
+     💬 MESSAGE HANDLER
+  ═══════════════════════════════════════════ */
+
+  bot.on("message", async (msg) => {
+    try {
+      if (!msg?.chat?.id || !msg?.from?.id) return;
+      if (!Utils.isPrivateChat(msg)) return;
+
+      const text = String(msg.text || "").trim();
+      if (!text || text.startsWith("/")) return;
+
+      const chatId = msg.chat.id;
+      const telegramId = msg.from.id;
+
+      // ═══════ MENU BUTTON HANDLERS ═══════
+
+      switch (text) {
+        case "🎮 Play":
+        case "🎮 Play Game":
+          return handlePlay(msg);
+
+        case "💰 Balance":
+          return handleBalance(msg);
+
+        case "💳 Deposit":
+          return handleDeposit(msg);
+
+        case "💸 Withdraw":
+          return handleWithdraw(msg);
+
+        case "📞 Support":
+        case "📞 Contact Support":
+          return handleSupport(msg);
+
+        case "❌ Cancel":
+          return handleCancel(msg);
+      }
+
+      // ═══════ TEXT TRIGGERS ═══════
+
+      const lowerText = text.toLowerCase();
+      if (lowerText === "support" || lowerText === "help" || lowerText === "contact") {
+        return handleSupport(msg);
+      }
+
+      // ═══════ CHECK USER STATUS ═══════
+
+      const user = await findUser(telegramId);
+
+      if (!user) {
+        return safeSend(chatId, Messages.registerFirst(), Keyboards.contact);
+      }
+
+      // ✅ Check if blocked
+      if (isBlocked(user)) {
+        return safeSend(chatId, Messages.blocked());
+      }
+
+      // ═══════ HANDLE ACTIVE FLOWS ═══════
+
+      if (deposit?.handleDepositFlow) {
+        const handled = await deposit.handleDepositFlow(bot, msg, user, safeSend);
+        if (handled) return;
+      }
+
+      if (withdraw?.handleWithdrawFlow) {
+        const handled = await withdraw.handleWithdrawFlow(bot, msg, user, safeSend);
+        if (handled) return;
+      }
+
+    } catch (error) {
+      console.error("[USER_BOT] Message error:", error?.message);
+    }
+  });
+
+  /* ═══════════════════════════════════════════
+     📱 CONTACT REGISTRATION HANDLER
+  ═══════════════════════════════════════════ */
+
   bot.on("contact", async (msg) => {
     const chatId = msg?.chat?.id;
     const from = msg?.from;
@@ -436,168 +657,136 @@ module.exports = (token) => {
 
     if (!isValidChatId(chatId) || !isValidTelegramId(from?.id) || !contact) return;
 
-    if (!isPrivateChat(msg)) {
-      await safeSend(chatId, Messages.privateOnly());
-      return;
-    }
-
-    if (isRateLimited(from.id)) return;
-
     try {
+      if (!Utils.isPrivateChat(msg)) {
+        return safeSend(chatId, Messages.privateOnly());
+      }
+
+      // Validate contact has phone number
       if (!contact.phone_number) {
-        await safeSend(chatId, Messages.invalidContact());
-        return;
+        return safeSend(chatId, Messages.invalidContact(), Keyboards.contact);
       }
 
+      // Ensure user shares their own contact
       if (!contact.user_id || String(contact.user_id) !== String(from.id)) {
-        await safeSend(chatId, Messages.shareOwnContact(), {
-          reply_markup: KEYBOARDS.contactRequest,
-        });
-        return;
-      }
-
-      const normalized09 = normalizeETPhone(contact.phone_number);
-      const vars = phoneVariants(contact.phone_number);
-
-      // Check if phone is in allowed admin phones
-      const isAllowed = vars.some((v) => ADMIN_PHONE_SET.has(v));
-
-      if (!isAllowed) {
-        await safeSend(chatId, Messages.accessDenied());
-        return;
+        return safeSend(chatId, Messages.shareOwnContact(), Keyboards.contact);
       }
 
       const telegramId = String(from.id);
-      const chatIdStr = String(chatId);
-      const username = from.username || contact.first_name || "Admin";
-      const phoneToStore = normalized09 || digitsOnly(contact.phone_number);
-      const displayName = from.first_name || username;
+      const phoneNo = Utils.normalizePhone(contact.phone_number);
+      const username = String(from.username || from.first_name || "").trim().slice(0, 64);
 
-      let admin = await Admin.findOne({
-        $or: [
+      // Check if user already exists
+      const existingUser = await findUser(telegramId);
+
+      if (existingUser) {
+        // ✅ CRITICAL: Check if user is BLOCKED before proceeding
+        if (isBlocked(existingUser)) {
+          await safeSend(chatId, Messages.blocked());
+          return;
+        }
+
+        // Update user info if needed
+        await User.findOneAndUpdate(
           { telegramId },
-          { phoneNumber: { $in: vars } },
-        ],
-      }).maxTimeMS(CONFIG.DB_MAX_TIME_MS);
-
-      if (!admin) {
-        try {
-          admin = await Admin.create({
-            telegramId,
-            chatId: chatIdStr,
-            username,
-            phoneNumber: phoneToStore,
-            role: "admin",
-          });
-
-          await safeSend(chatId, Messages.registered(displayName), {
-            reply_markup: KEYBOARDS.remove,
-          });
-        } catch (e) {
-          if (e?.code === 11000) {
-            admin = await Admin.findOne({
-              $or: [
-                { telegramId },
-                { phoneNumber: { $in: vars } },
-              ],
-            }).maxTimeMS(CONFIG.DB_MAX_TIME_MS);
-          } else {
-            throw e;
+          {
+            $set: {
+              chatId: String(chatId),
+              ...(phoneNo && !existingUser.phoneNo && { phoneNo }),
+              ...(username && { username }),
+            },
           }
-        }
-      } else {
-        const update = {};
-        if (!admin.telegramId || String(admin.telegramId) !== telegramId) update.telegramId = telegramId;
-        if (!admin.chatId || String(admin.chatId) !== chatIdStr) update.chatId = chatIdStr;
-        if (!admin.phoneNumber) update.phoneNumber = phoneToStore;
-        if (!admin.username && from.username) update.username = from.username;
+        );
 
-        if (Object.keys(update).length > 0) {
-          await Admin.updateOne({ _id: admin._id }, { $set: update }).maxTimeMS(CONFIG.DB_MAX_TIME_MS);
-        }
-
-        await safeSend(chatId, Messages.alreadyRegistered(), {
-          reply_markup: KEYBOARDS.remove,
-        });
+        const updatedUser = await findUser(telegramId);
+        await safeSend(chatId, Messages.welcomeBack(updatedUser?.username || "Player"), Keyboards.remove);
+        return showMenu(chatId, updatedUser);
       }
 
-      const fresh = await getAdminLean(telegramId);
-      if (!fresh || !roleIsAdmin(fresh.role)) {
-        await safeSend(chatId, Messages.accessDenied());
-        return;
+      // New registration - check limit
+      const canRegister = await canRegisterNewUser();
+
+      if (!canRegister) {
+        return safeSend(chatId, Messages.limitReached());
       }
 
-      await sendWelcome(msg, fresh);
-    } catch (err) {
-      console.error("[ADMIN_BOT][contact] error:", err?.message || err);
-      await safeSend(chatId, Messages.error());
+      // Create new user
+      await User.create({
+        telegramId,
+        chatId: String(chatId),
+        phoneNo: phoneNo || "",
+        username: username || "",
+        role: "user",
+        status: "active",
+        Balance: 0,
+      });
+
+      const newUser = await findUser(telegramId);
+
+      await safeSend(chatId, Messages.registered(), Keyboards.remove);
+      return showMenu(chatId, newUser);
+
+    } catch (error) {
+      console.error("[USER_BOT] Contact error:", error?.message);
+
+      if (error?.code === 11000) {
+        const user = await findUser(from.id);
+        if (user) {
+          // ✅ Check blocked even on duplicate error
+          if (isBlocked(user)) {
+            return safeSend(chatId, Messages.blocked());
+          }
+          return showMenu(chatId, user);
+        }
+      }
+
+      return safeSend(chatId, Messages.error(), Keyboards.mainMenu);
     }
   });
 
-  /* ═══════════════════════════════════════════════════════════════════════
-     /admin_panel (WebApp)
-  ═══════════════════════════════════════════════════════════════════════ */
-  bot.onText(/^\/admin_panel(?:@\w+)?$/i, async (msg) => {
-    const chatId = msg?.chat?.id;
-    const telegramId = msg?.from?.id;
+  /* ═══════════════════════════════════════════
+     ❌ ERROR HANDLING
+  ═══════════════════════════════════════════ */
 
-    if (!isValidChatId(chatId) || !isValidTelegramId(telegramId)) return;
-
-    if (!isPrivateChat(msg)) {
-      await safeSend(chatId, Messages.privateOnly());
-      return;
-    }
-
-    if (isRateLimited(telegramId)) return;
-
-    try {
-      const admin = await checkAdminAccess(msg);
-      if (!admin) return;
-
-      await sendPanelAccess(chatId, Messages.openPanel());
-    } catch (err) {
-      console.error("[ADMIN_BOT][/admin_panel] error:", err?.message || err);
-      await safeSend(chatId, Messages.error());
-    }
-  });
-
-  /* ═══════════════════════════════════════════════════════════════════════
-     Polling / bot errors
-  ═══════════════════════════════════════════════════════════════════════ */
-  bot.on("polling_error", (err) => {
-    const msg = err?.message || String(err);
+  bot.on("polling_error", (error) => {
+    const msg = error?.message || String(error);
 
     if (msg.includes("ETIMEOUT") || msg.includes("ECONNRESET")) {
-      console.warn("[ADMIN_BOT] Polling timeout/reset, will retry...");
+      console.warn("[USER_BOT] Polling timeout/reset, will retry...");
       return;
     }
 
-    if (String(err?.code) === "ETELEGRAM" && String(err?.response?.statusCode) === "409") {
-      console.error("[ADMIN_BOT] Polling conflict (409). Another bot instance may be running.");
+    if (String(error?.code) === "ETELEGRAM" && String(error?.response?.statusCode) === "409") {
+      console.error("[USER_BOT] Polling conflict (409). Another instance may be running.");
       bot.stopPolling().catch(() => {});
       return;
     }
 
-    console.error("[ADMIN_BOT] polling_error:", msg);
+    console.error("[USER_BOT] Polling error:", msg);
   });
 
-  bot.on("error", (err) => console.error("[ADMIN_BOT] error:", err?.message || err));
+  bot.on("error", (err) => console.error("[USER_BOT] error:", err?.message || err));
 
-  /* ═══════════════════════════════════════════════════════════════════════
-     Graceful shutdown
-  ═══════════════════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════
+     🛑 GRACEFUL SHUTDOWN
+  ═══════════════════════════════════════════ */
+
   const shutdown = async () => {
-    console.log("[ADMIN_BOT] Shutting down...");
+    console.log("[USER_BOT] Shutting down...");
     try {
       await bot.stopPolling();
-      console.log("[ADMIN_BOT] Polling stopped");
+      console.log("[USER_BOT] Polling stopped");
     } catch (e) {
-      console.error("[ADMIN_BOT] Shutdown error:", e?.message || e);
+      console.error("[USER_BOT] Shutdown error:", e?.message || e);
     }
   };
 
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
+
+  /* ═══════════════════════════════════════════
+     📤 EXPORT BOT INSTANCE
+  ═══════════════════════════════════════════ */
 
   return bot;
 };
