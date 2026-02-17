@@ -9,7 +9,7 @@ const Admin = AdminModel.default || AdminModel;
 ═══════════════════════════════════════════ */
 
 const CONFIG = {
-  MIN_DEPOSIT: 100,
+  MIN_DEPOSIT: 50,
   MAX_DEPOSIT: 10_000,
   CLEANUP_AGE_MS: 7 * 24 * 60 * 60 * 1000, // 1 week
 };
