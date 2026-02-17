@@ -5,17 +5,17 @@ const Withdraw = require("../models/withdraw");
 const SubAdmin = require("../models/subadmin");
 
 /* ═══════════════════════════════════════════
-⚙️ CONFIGURATION
+   ⚙️ CONFIGURATION
 ═══════════════════════════════════════════ */
 
 const CONFIG = {
-  MIN_WITHDRAW: 100,
+  MIN_WITHDRAW: 50,
   MAX_WITHDRAW: 10_000,
   CLEANUP_AGE_MS: 7 * 24 * 60 * 60 * 1000, // 1 week
 };
 
 /* ═══════════════════════════════════════════
-🎨 KEYBOARDS
+   🎨 KEYBOARDS
 ═══════════════════════════════════════════ */
 
 const Keyboards = {
@@ -38,24 +38,16 @@ const Keyboards = {
 };
 
 /* ═══════════════════════════════════════════
-🔧 UTILITY FUNCTIONS
+   🔧 UTILITY FUNCTIONS
 ═══════════════════════════════════════════ */
 
 const Utils = {
-  /**
-   * Clean extra spaces
-   */
   cleanSpaces(str) {
     return String(str ?? "")
       .replace(/\s+/g, " ")
       .trim();
   },
 
-  /**
-   * Normalize Ethiopian phone to international format
-   * Accepts: 0912345678, 912345678, 251912345678
-   * Returns: 251912345678 or empty string if invalid
-   */
   normalizePhone(raw) {
     const digits = String(raw ?? "").replace(/\D/g, "");
 
@@ -71,9 +63,6 @@ const Utils = {
     return "";
   },
 
-  /**
-   * Format phone for display (251912345678 → 0912345678)
-   */
   formatPhoneDisplay(phone) {
     if (phone?.startsWith("251") && phone.length === 12) {
       return "0" + phone.slice(3);
@@ -81,10 +70,6 @@ const Utils = {
     return phone || "";
   },
 
-  /**
-   * Parse amount from text (handles "1,000 birr", "500", etc.)
-   * Returns NaN if invalid
-   */
   parseAmount(text) {
     const cleaned = String(text ?? "")
       .replace(/[,\s]/g, "")
@@ -96,37 +81,16 @@ const Utils = {
     return Number.isFinite(num) ? num : NaN;
   },
 
-  /**
-   * Extract first name from full name
-   */
   extractFirstName(fullName) {
     const cleaned = Utils.cleanSpaces(fullName);
     if (!cleaned) return "";
     return cleaned.split(" ")[0];
   },
 
-  /**
-   * Format number with thousand separators
-   */
   formatNumber(num) {
-    return Number(num || 0).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+    return Number(num || 0).toLocaleString();
   },
 
-  /**
-   * Round to 2 decimal places (prevents floating-point errors)
-   * ✅ CRITICAL: Use this before any balance operations
-   */
-  roundAmount(amount) {
-    const num = Number(amount) || 0;
-    return Math.round(num * 100) / 100;
-  },
-
-  /**
-   * Check if text is a cancel command
-   */
   isCancelCommand(text) {
     const normalized = String(text ?? "").trim().toLowerCase();
     return normalized === "/cancel" || normalized === "❌ cancel";
@@ -134,7 +98,7 @@ const Utils = {
 };
 
 /* ═══════════════════════════════════════════
-👨‍💼 SUBADMIN SERVICE
+   👨‍💼 SUBADMIN SERVICE
 ═══════════════════════════════════════════ */
 
 const SubAdminService = {
@@ -158,12 +122,12 @@ const SubAdminService = {
 };
 
 /* ═══════════════════════════════════════════
-💬 MESSAGE TEMPLATES (Clean & Simple)
+   💬 MESSAGE TEMPLATES (Clean & Simple)
 ═══════════════════════════════════════════ */
 
 const Messages = {
   pendingExists: () =>
-    `⏳ Withdrawal Pending
+`⏳ *Withdrawal Pending*
 
 You have a pending withdrawal request.
 Please wait for approval or rejection.
@@ -172,14 +136,14 @@ Please wait for approval or rejection.
 እባክዎ ይጠብቁ።`,
 
   cancelled: () =>
-    `❌ Cancelled
+`❌ *Cancelled*
 
 Type /withdraw to start again.
 
 ተሰርዟል።`,
 
   balanceTooLow: (balance) =>
-    `⚠️ Insufficient Balance
+`⚠️ *Insufficient Balance*
 
 Your balance: ${Utils.formatNumber(balance)} ብር
 Minimum required: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
@@ -187,16 +151,16 @@ Minimum required: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
 ሚዛንዎ በቂ አይደለም።`,
 
   noActiveSubAdmin: () =>
-    `⏸️ Withdraw Unavailable
+`⏸️ *Withdraw Unavailable*
 
-Withdraw system is not available at this time.
+Withdraw system is not available this time.
 Please wait and try again later.
 
 የማውጫ አገልግሎት በአሁኑ ሰዓት አይገኝም።
 እባክዎ ቆይተው ይሞክሩ።`,
 
   askPhone: () =>
-    `💸 Withdraw Funds
+`💸 *Withdraw Funds*
 ገንዘብ ያውጡ
 
 📊 Limits: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} - ${Utils.formatNumber(CONFIG.MAX_WITHDRAW)} ብር
@@ -211,7 +175,7 @@ Example: \`0912345678\`
 ❌ Type /cancel to exit`,
 
   invalidPhone: () =>
-    `⚠️ Invalid Phone Number
+`⚠️ *Invalid Phone Number*
 
 Valid formats:
 • \`0912345678\`
@@ -221,7 +185,7 @@ Valid formats:
 የተሳሳተ ቁጥር - እንደገና ይሞክሩ`,
 
   askName: (phone) =>
-    `👤 Account Name
+`👤 *Account Name*
 የመለያ ስም
 
 📱 Phone: \`${Utils.formatPhoneDisplay(phone)}\`
@@ -238,7 +202,7 @@ Example: \`Abebe Kebede\`
 ❌ Type /cancel to exit`,
 
   invalidName: () =>
-    `⚠️ Invalid Name
+`⚠️ *Invalid Name*
 
 Please enter a valid name.
 
@@ -247,7 +211,7 @@ Example: \`Abebe\` or \`Abebe Kebede\`
 የተሳሳተ ስም`,
 
   askAmount: (phone, name, balance) =>
-    `💰 Enter Amount
+`💰 *Enter Amount*
 መጠን ያስገቡ
 
 📱 Phone: \`${Utils.formatPhoneDisplay(phone)}\`
@@ -255,10 +219,10 @@ Example: \`Abebe\` or \`Abebe Kebede\`
 
 ━━━━━━━━━━━━━━━━━━━━
 
-💵 Available Balance: ${Utils.formatNumber(balance)} ብር
+💵 *Available Balance:* ${Utils.formatNumber(balance)} ብር
 
-📊 Minimum: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
-📊 Maximum: ${Utils.formatNumber(CONFIG.MAX_WITHDRAW)} ብር
+📊 *Minimum:* ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
+📊 *Maximum:* ${Utils.formatNumber(CONFIG.MAX_WITHDRAW)} ብር
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -267,7 +231,7 @@ Example: \`500\` or \`1000\`
 ❌ Type /cancel to exit`,
 
   invalidAmount: () =>
-    `⚠️ Invalid Amount
+`⚠️ *Invalid Amount*
 
 Please enter a valid number.
 
@@ -276,28 +240,28 @@ Example: \`500\` or \`1000\`
 የተሳሳተ መጠን`,
 
   amountTooLow: () =>
-    `⚠️ Amount Too Low
+`⚠️ *Amount Too Low*
 
 Minimum: ${Utils.formatNumber(CONFIG.MIN_WITHDRAW)} ብር
 
 መጠኑ በጣም ዝቅተኛ ነው`,
 
   amountTooHigh: () =>
-    `⚠️ Amount Too High
+`⚠️ *Amount Too High*
 
 Maximum: ${Utils.formatNumber(CONFIG.MAX_WITHDRAW)} ብር
 
 መጠኑ በጣም ከፍተኛ ነው`,
 
   accountBlocked: () =>
-    `🚫 Account Blocked
+`🚫 *Account Blocked*
 
 Your account is blocked. Contact support.
 
 መለያዎ ታግዷል።`,
 
   insufficientBalance: (balance) =>
-    `❌ Insufficient Balance
+`❌ *Insufficient Balance*
 
 Your balance: ${Utils.formatNumber(balance)} ብር
 
@@ -306,7 +270,7 @@ The amount exceeds your balance.
 ሚዛንዎ በቂ አይደለም`,
 
   success: (amount, phone, firstName) =>
-    `✅ Withdrawal Submitted!
+`✅ *Withdrawal Submitted!*
 ጥያቄዎ ተልኳል!
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -321,7 +285,7 @@ The amount exceeds your balance.
 በቅርብ ጊዜ እንገመግማለን ✨`,
 
   error: () =>
-    `❌ Error
+`❌ *Error*
 
 Something went wrong. Try again.
 
@@ -329,7 +293,7 @@ Something went wrong. Try again.
 };
 
 /* ═══════════════════════════════════════════
-🧹 CLEANUP
+   🧹 CLEANUP
 ═══════════════════════════════════════════ */
 
 async function cleanupOldWithdrawals() {
@@ -350,12 +314,9 @@ async function cleanupOldWithdrawals() {
 }
 
 /* ═══════════════════════════════════════════
-🎮 MAIN HANDLERS
+   🎮 MAIN HANDLERS
 ═══════════════════════════════════════════ */
 
-/**
- * Start withdraw process
- */
 async function startWithdraw(bot, msg, user, safeSend) {
   const chatId = msg?.chat?.id;
   const telegramId = String(msg?.from?.id);
@@ -363,7 +324,6 @@ async function startWithdraw(bot, msg, user, safeSend) {
   if (!chatId || !telegramId) return false;
 
   try {
-    // Cleanup old records
     await cleanupOldWithdrawals();
 
     // ✅ STEP 1: Check pending withdraw
@@ -379,7 +339,7 @@ async function startWithdraw(bot, msg, user, safeSend) {
 
     // ✅ STEP 2: Check user balance >= 100
     const freshUser = await User.findOne({ telegramId }, { Balance: 1 }).lean();
-    const balance = Utils.roundAmount(freshUser?.Balance ?? 0);
+    const balance = Number(freshUser?.Balance ?? 0);
 
     if (balance < CONFIG.MIN_WITHDRAW) {
       await safeSend(chatId, Messages.balanceTooLow(balance), Keyboards.mainMenu);
@@ -415,9 +375,6 @@ async function startWithdraw(bot, msg, user, safeSend) {
   }
 }
 
-/**
- * Handle withdraw flow (multi-step)
- */
 async function handleWithdrawFlow(bot, msg, user, safeSend) {
   const chatId = msg?.chat?.id;
   const telegramId = String(msg?.from?.id);
@@ -425,7 +382,6 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
 
   if (!chatId || !telegramId) return false;
 
-  // Check if user has active session
   const session = await Withdraw.findOne({ telegramId, status: "session" });
 
   if (!session) return false;
@@ -473,7 +429,7 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
 
       // Fetch fresh balance for display
       const freshUser = await User.findOne({ telegramId }, { Balance: 1 }).lean();
-      const balance = Utils.roundAmount(freshUser?.Balance ?? 0);
+      const balance = Number(freshUser?.Balance ?? 0);
 
       await Withdraw.updateOne(
         { _id: session._id },
@@ -496,16 +452,13 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
 
     // ═══════ STEP 3: Amount ═══════
     if (session.step === "await_amount") {
-      const parsedAmount = Utils.parseAmount(inputText);
+      const amount = Utils.parseAmount(inputText);
 
       // Validate: Is number?
-      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      if (!Number.isFinite(amount) || amount <= 0) {
         await safeSend(chatId, Messages.invalidAmount(), Keyboards.cancel);
         return true;
       }
-
-      // ✅ CRITICAL: Round to 2 decimal places (matches User schema)
-      const amount = Utils.roundAmount(parsedAmount);
 
       // Validate: Minimum
       if (amount < CONFIG.MIN_WITHDRAW) {
@@ -534,8 +487,7 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
         return true;
       }
 
-      // ✅ Get balance with proper rounding (matches schema getter)
-      const balance = Utils.roundAmount(dbUser.Balance ?? 0);
+      const balance = Number(dbUser.Balance ?? 0);
 
       // Validate: Sufficient balance?
       if (amount > balance) {
@@ -543,42 +495,29 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
         return true;
       }
 
-      // ═══════════════════════════════════════════════════════
-      // ✅ DEDUCT BALANCE (Properly rounded, atomic operation)
-      // ═══════════════════════════════════════════════════════
+      // ✅ DEDUCT BALANCE (Atomic operation)
       const deductResult = await User.updateOne(
-        {
-          telegramId,
-          Balance: { $gte: amount }, // Double-check balance is sufficient
-        },
-        {
-          $inc: { Balance: -amount }, // Deduct with rounded amount
-        }
+        { telegramId, Balance: { $gte: amount } },
+        { $inc: { Balance: -amount } }
       );
 
-      // Check if deduction was successful
       if (!deductResult || deductResult.modifiedCount !== 1) {
-        // Balance became insufficient between checks (race condition)
         const freshUser = await User.findOne({ telegramId }, { Balance: 1 }).lean();
-        const currentBalance = Utils.roundAmount(freshUser?.Balance ?? 0);
-
         await safeSend(
           chatId,
-          Messages.insufficientBalance(currentBalance),
+          Messages.insufficientBalance(Number(freshUser?.Balance ?? 0)),
           Keyboards.cancel
         );
         return true;
       }
 
-      // ═══════════════════════════════════════════════════════
-      // ✅ SUBMIT WITHDRAW REQUEST AS PENDING
-      // ═══════════════════════════════════════════════════════
+      // ✅ SUBMIT WITHDRAW
       try {
         await Withdraw.updateOne(
           { _id: session._id, status: "session" },
           {
             $set: {
-              amount: amount, // Already rounded
+              amount,
               status: "pending",
               step: null,
               approvedBy: null,
@@ -587,7 +526,6 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
           }
         );
 
-        // Send success message to user
         await safeSend(
           chatId,
           Messages.success(
@@ -598,24 +536,11 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
           Keyboards.mainMenu
         );
 
-        console.log(
-          `[WITHDRAW] ✅ Created pending withdrawal | User: ${telegramId} | Amount: ${amount} | Balance deducted`
-        );
-
         return true;
       } catch (error) {
-        // ⚠️ ROLLBACK: Restore balance if withdrawal creation failed
-        console.error(
-          `[WITHDRAW] ❌ Failed to create withdrawal, rolling back balance | User: ${telegramId}`,
-          error?.message
-        );
-
-        await User.updateOne(
-          { telegramId },
-          { $inc: { Balance: amount } } // Add back the deducted amount
-        );
-
-        throw error; // Re-throw to trigger error message
+        // ⚠️ ROLLBACK on error
+        await User.updateOne({ telegramId }, { $inc: { Balance: amount } });
+        throw error;
       }
     }
 
@@ -623,12 +548,9 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
   } catch (error) {
     console.error("[WITHDRAW] Flow error:", error?.message);
 
-    // Clean up session on error
     try {
       await Withdraw.deleteMany({ telegramId, status: "session" });
-    } catch (cleanupError) {
-      console.error("[WITHDRAW] Cleanup error:", cleanupError?.message);
-    }
+    } catch (e) {}
 
     await safeSend(chatId, Messages.error(), Keyboards.mainMenu);
     return true;
@@ -636,12 +558,12 @@ async function handleWithdrawFlow(bot, msg, user, safeSend) {
 }
 
 /* ═══════════════════════════════════════════
-📤 EXPORTS
+   📤 EXPORTS
 ═══════════════════════════════════════════ */
 
 module.exports = {
   startWithdraw,
   handleWithdrawFlow,
   cleanupOldWithdrawals,
-  CONFIG,
+  ...CONFIG,
 };
